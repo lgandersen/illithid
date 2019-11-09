@@ -4,15 +4,19 @@
          zfs/1,
          create/1,
          destroy/1,
+         destroy_force/1,
          snapshot/1,
          clone/2
         ]).
 
-%% zfs
+
 create(Dataset) ->
     % zfs create [-pu] [-o property=value]... filesystem
     zfs("create " ++ Dataset).
 
+
+destroy_force(Dataset) ->
+    zfs("destroy -f " ++ Dataset).
 
 destroy(Dataset) ->
     % zfs destroy [-dnpRrv] snapshot[%snapname][,...]
@@ -33,13 +37,13 @@ clone(Snapshot, CloneName) ->
 zfs(Cmd) ->
     mindflayer_utils:exec("/sbin/zfs " ++ Cmd).
 
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--define(BASEJAIL_SNAPSHOT, "zroot/mindflayer_base@base_unittest").
--define(TESTJAIL, "zroot/mindflayer_dev/unittestjail").
+-include_lib("test.hrl").
 create_clone_test() ->
-    "" = snapshot(?BASEJAIL_SNAPSHOT),
-    "" = clone(?BASEJAIL_SNAPSHOT, ?TESTJAIL),
-    "" = destroy(?TESTJAIL),
-    "" = destroy(?BASEJAIL_SNAPSHOT).
+    "" = snapshot(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT),
+    "" = clone(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT, ?TEST_MF_ZFS_TESTJAIL),
+    "" = destroy(?TEST_MF_ZFS_TESTJAIL),
+    "" = destroy(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT).
 -endif.

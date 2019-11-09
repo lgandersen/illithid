@@ -2,9 +2,8 @@
 %%% @author lga
 %%% @copyright (C) 2019, lga
 %%% @doc
-%%%
+%%% This gen_server manages jails: Creates, destroys and monitor jails.
 %%% @end
-%%% Created : 2019-10-14 09:16:54.803198
 %%%-------------------------------------------------------------------
 -module(mindflayer_jail).
 
@@ -54,6 +53,9 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+create(Jail) ->
+    gen_server:cast(?SERVER, {create, Jail}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -71,8 +73,8 @@ start_link() ->
 %%--------------------------------------------------------------------
 init([]) ->
     "" = mindflayer_zfs:snapshot(?BASEJAIL_SNAPSHOT),
-    JailTable = ets:new(jail_table, [protected, {keypos, 0}]),
-    {ok, #state{jail_table=JailTable}}.
+    JailTable = ets:new(jail_table, [protected, {keypos, 1}]),
+    {ok, #state{ jail_table = JailTable }}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -102,6 +104,11 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast({create, Jail}, #state{ jail_table = JailTable } = State) ->
+    create_(Jail),
+    ok = ets:insert(JailTable, Jail),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -146,10 +153,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-create(#jail{jid=JId, name=Name, path=Path, command=Cmd, arg=Arg, param=Param}) ->
+create_(#jail{jid=JId, name=Name, path=Path, command=Cmd, arg=Arg, param=Param}) ->
     {ok, ParamString} = commandify_param(Param, ""),
     % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
-    % Creating a permanent jail: create("testjail", "/" ++ ?TESTJAIL, "10.13.37.3", "/bin/sh", " /etc/rc"),
+    % Creating a permanent jail: create("testjail", "/" ++ ?TEST_MF_JAIL_TESTJAIL, "10.13.37.3", "/bin/sh", " /etc/rc"),
 
     %mindflayer_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
     ExecString = "jail -c jid=~p path=~p name=~p " ++ ParamString ++ " command=~p",
@@ -179,24 +186,38 @@ umount_devfs(JailPath) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-
--define(TEST_BASEJAIL_SNAPSHOT, "zroot/mindflayer_base@base_unittest_jail").
--define(TESTJAIL, "unittest_jail_jail").
--define(TESTJAIL_PATH, "zroot/mindflayer_dev/" ++ ?TESTJAIL).
-
+-include_lib("test.hrl").
 jail_creation_test() ->
     Jail = #jail{
               jid = 1,
-              name= ?TESTJAIL,
-              path= "/" ++ ?TESTJAIL_PATH,
+              name= ?TEST_MF_JAIL_TESTJAIL,
+              path= "/" ++ ?TEST_MF_JAIL_PATH,
               command="/bin/ls",
-              param=["mount.devfs", "ip4.addr=10.13.37.3"]
+              param=["mount.devfs", "ip4.addr=10.13.37.3"] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
              },
-    "" = mindflayer_zfs:snapshot(?TEST_BASEJAIL_SNAPSHOT),
-    "" = mindflayer_zfs:clone(?TEST_BASEJAIL_SNAPSHOT, ?TESTJAIL_PATH),
-    Output = create(Jail),
-    Output = create(Jail#jail{ arg = " /" }),
-    destroy(Jail),
-    "" = mindflayer_zfs:destroy(?TESTJAIL_PATH),
-    "" = mindflayer_zfs:destroy(?TEST_BASEJAIL_SNAPSHOT).
+    "" = mindflayer_zfs:snapshot(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
+    "" = mindflayer_zfs:clone(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT, ?TEST_MF_JAIL_PATH),
+    Output = create_(Jail#jail{ arg = " /" }),
+    umount_devfs(Jail#jail.path),
+    %time:sleep(100),
+    %"" = destroy(Jail),
+    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_PATH),
+    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT).
+
+
+%jail_destroy_test() ->
+%    Jail = #jail{
+%              jid = 1,
+%              name= ?TEST_MF_JAIL_TESTJAIL,
+%              path= "/" ++ ?TEST_MF_JAIL_PATH,
+%              command="/bin/sh",
+%              param=["ip4.addr=10.13.37.3"]
+%             },
+%    "" = mindflayer_zfs:snapshot(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
+%    "" = mindflayer_zfs:clone(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT, ?TEST_MF_JAIL_PATH),
+%    % This takes some time before the jail is ready which means that the destroy-command will timeout the test
+%    Output = create_(Jail#jail { arg = " /etc/rc"}),
+%    "" = destroy(Jail),
+%    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_PATH),
+%    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT).
 -endif.
