@@ -6,7 +6,7 @@
 
 main(["clean"]) ->
     %io:format("Args: ~p~n", ["lol"]),
-    mindflayer_zfs:destroy_force(?TEST_MF_JAIL_PATH),
+    mindflayer_zfs:destroy_force(?TEST_MF_JAIL_DATASET),
     mindflayer_zfs:destroy_force(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
 
     mindflayer_zfs:destroy_force(?TEST_MF_ZFS_TESTJAIL),
