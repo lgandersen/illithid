@@ -1,9 +1,17 @@
 -record(jail, {
-          jid         = none,
           name        = none,
+          jid         = none,
           path        = none,
           zfs_dataset = none,
           command     = none,
-          arg         = "",
-          param       = []
+          command_args = none,
+          port        = none,
+          parameters   = []
           }).
+
+
+-record(image, {
+         name        = none,
+         destination = none, %dataset@freeze
+         parent      = none  %dataset@freeze
+         }).

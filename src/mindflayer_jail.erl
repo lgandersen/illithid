@@ -60,21 +60,28 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({create, #jail { zfs_dataset = Dataset} = Jail}, #state{ jail_table = JailTable, basejail_snapshot = BasejailSnapshot } = State) ->
-    "" = mindflayer_zfs:clone(BasejailSnapshot, Dataset),
-    create_(Jail),
-    true = ets:insert(JailTable, Jail),
+    0 = mindflayer_zfs:clone(BasejailSnapshot, Dataset),
+    Port = create_(Jail),
+    true = ets:insert(JailTable, Jail#jail { port = Port }),
     {noreply, State};
 
-handle_cast({destroy, #jail { jid = JId } = Jail}, #state{ jail_table = JailTable } = State) ->
+
+handle_cast({destroy, #jail { name = Name } = Jail}, #state{ jail_table = Table } = State) ->
     destroy_(Jail),
-    true = ets:delete(JailTable, JId),
+    true = ets:delete(Table, Name),
     {noreply, State};
-
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info(_Info, State) ->
+
+handle_info({Port, {exit_status, N}}, #state { jail_table = Table } = State) ->
+    true = ets:match_delete(Table, #jail{port=Port}),
+    io:format(user, "Port ~p exited with status ~p~n", [Port, N]),
+    {noreply, State};
+
+handle_info(Info, State) ->
+    io:format(user, "Unknow message received to jail manager: ~p~n", [Info]),
     {noreply, State}.
 
 
@@ -89,27 +96,29 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-create_(#jail{jid=JId, name=Name, path=Path, command=Cmd, arg=Arg, param=Param}) ->
-    % TODO: Check if the JId is used before trying to create a jail.
-    {ok, ParamString} = commandify_param(Param, ""),
-    % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
-    % Creating a permanent jail: create("testjail", "/" ++ ?TEST_MF_JAIL_TESTJAIL, "10.13.37.3", "/bin/sh", " /etc/rc"),
-
+create_(#jail{name=Name, path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
+% $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     %mindflayer_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
-    ExecString = "jail -c jid=~p path=~p name=~p " ++ ParamString ++ " command=~p",
-    mindflayer_utils:exec(io_lib:format(ExecString, [JId, Path, Name, Cmd]) ++ Arg).
+    Executable = "/usr/sbin/jail",
+    Args = ["-c",
+            "path=" ++ Path,
+            "name=" ++ Name
+           ] ++ Parameters ++ [
+            "command=" ++ Cmd
+           ] ++ CmdArgs,
+    Port = open_port({spawn_executable, Executable},
+                     [exit_status,
+                      {line, 1024},
+                      {args, Args}
+                      ]),
+    DebugCmd = string:join([Executable | Args], " "),
+    io:format(user, "DEBUG CMD:~s~n", [DebugCmd]),
+    Port.
 
 
 destroy_(#jail{name=Name, path=Path}) ->
     mindflayer_utils:exec(io_lib:format("jail -r ~s", [Name])),
     umount_devfs(Path).
-
-
-commandify_param([Param | Rest], ParamStr) ->
-    commandify_param(Rest, ParamStr ++ " " ++ Param);
-
-commandify_param([], ParamStr) ->
-    {ok, ParamStr}.
 
 
 umount_devfs(JailPath) ->

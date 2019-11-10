@@ -13,7 +13,7 @@ all() -> [create_jail, destroy_jail].
 
 create_jail(Config) ->
     Jail = ?config(jail, Config),
-    ok = mindflayer_jail:create(Jail#jail { command = "/bin/ls", arg = " /" }),
+    ok = mindflayer_jail:create(Jail#jail { command = "/bin/ls", command_args=["/"] }),
     timer:sleep(1000), % Atm the call above is async which means that we'll have to wait for the gen_server to actually execute.
     mindflayer_jail:umount_devfs(Jail#jail.path),
     ok.
@@ -21,7 +21,7 @@ create_jail(Config) ->
  
 destroy_jail(Config) ->
     Jail = ?config(jail, Config),
-    ok = mindflayer_jail:create(Jail#jail { command = "/bin/sh", arg = " /etc/rc" }),
+    ok = mindflayer_jail:create(Jail#jail { command = "/bin/sh", command_args=["etc/rc"] }),
     timer:sleep(1000), % Atm the call above is async which means that we'll have to wait for the gen_server to actually execute.
     mindflayer_jail:destroy(Jail),
     timer:sleep(15000), % It takes some time to close down a fullblown and recently created jail!
@@ -29,19 +29,18 @@ destroy_jail(Config) ->
 
 
 init_per_testcase(_TestCase, Config) ->
-    "" = mindflayer_zfs:snapshot(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
+    0 = mindflayer_zfs:snapshot(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
     mindflayer_jail:start_link(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
     Jail = #jail{
-              jid = 1,
               name= ?TEST_MF_JAIL_TESTJAIL,
               path= "/" ++ ?TEST_MF_JAIL_DATASET, %% Atm mindflayer_jail is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
               zfs_dataset = ?TEST_MF_JAIL_DATASET,
-              param=["mount.devfs", "ip4.addr=10.13.37.3"] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
+              parameters=["mount.devfs", "ip4.addr=10.13.37.3", "exec.stop=\"/bin/sh /etc/rc.shutdown\""] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
              },
     [{jail, Jail} | Config].
 
 
 end_per_testcase(_TestCase, _Config) ->
-    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_DATASET),
-    "" = mindflayer_zfs:destroy(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
+    0 = mindflayer_zfs:destroy(?TEST_MF_JAIL_DATASET),
+    0 = mindflayer_zfs:destroy(?TEST_MF_JAIL_BASEJAIL_SNAPSHOT),
     ok.
