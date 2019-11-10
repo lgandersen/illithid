@@ -18,6 +18,7 @@ create(Dataset) ->
 destroy_force(Dataset) ->
     zfs(["destroy", "-f", Dataset]).
 
+
 destroy(Dataset) ->
     % zfs destroy [-dnpRrv] snapshot[%snapname][,...]
     % zfs destroy [-fnpRrv] filesystem|volume
@@ -46,10 +47,14 @@ zfs(Args) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("test.hrl").
+-include_lib("mindflayer.hrl").
+
 create_clone_test() ->
-    0 = snapshot(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT),
-    0 = clone(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT, ?TEST_MF_ZFS_TESTJAIL),
-    0 = destroy(?TEST_MF_ZFS_TESTJAIL),
-    0 = destroy(?TEST_MF_ZFS_BASEJAIL_SNAPSHOT).
+    ZRootTest =?ZROOT ++ "/test",
+    0 = create(ZRootTest),
+    0 = clone(?BASEJAIL_IMAGE, ZRootTest ++ "/zfs_test"),
+    0 = snapshot(ZRootTest ++ "/zfs_test@lol"),
+    0 = destroy(ZRootTest ++ "/zfs_test@lol"),
+    0 = destroy(ZRootTest ++ "/zfs_test"),
+    0 = destroy(ZRootTest).
 -endif.

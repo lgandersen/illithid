@@ -13,7 +13,6 @@
 
 %% API
 -export([start_link/1,
-        create/1,
         destroy/1,
         umount_devfs/1]).
 
@@ -28,19 +27,16 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-          jail_table = none,
-          next_jid = 1,
-          basejail_snapshot = none
+          caller = none,
+          port =  none,
+          jail_config = none
          }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link(BasejailSnapshot) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [BasejailSnapshot], []).
-
-create(Jail) ->
-    gen_server:cast(?SERVER, {create, Jail}).
+start_link([Jail]) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [Jail], []).
 
 destroy(Jail) ->
     gen_server:cast(?SERVER, {destroy, Jail}).
@@ -49,9 +45,10 @@ destroy(Jail) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([BasejailSnapshot]) ->
-    JailTable = ets:new(jail_table, [protected, {keypos, 1}]),
-    {ok, #state{ jail_table = JailTable, basejail_snapshot = BasejailSnapshot }}.
+init([Jail]) ->
+    %JailTable = ets:new(jail_table, [protected, {keypos, 1}]),
+    Port = create(Jail),
+    {ok, #state{ jail_config = Jail, port=Port }}.
 
 
 handle_call(_Request, _From, State) ->
@@ -59,25 +56,22 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({create, #jail { zfs_dataset = Dataset} = Jail}, #state{ jail_table = JailTable, basejail_snapshot = BasejailSnapshot } = State) ->
-    0 = mindflayer_zfs:clone(BasejailSnapshot, Dataset),
-    Port = create_(Jail),
-    true = ets:insert(JailTable, Jail#jail { port = Port }),
-    {noreply, State};
-
-
-handle_cast({destroy, #jail { name = Name } = Jail}, #state{ jail_table = Table } = State) ->
+handle_cast({destroy, Jail}, State) ->
     destroy_(Jail),
-    true = ets:delete(Table, Name),
+    %true = ets:delete(Table, Name),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({Port, {exit_status, N}}, #state { jail_table = Table } = State) ->
-    true = ets:match_delete(Table, #jail{port=Port}),
+handle_info({Port, {exit_status, N}}, State) ->
+    %true = ets:match_delete(Table, #jail{ port = Port }),
     io:format(user, "Port ~p exited with status ~p~n", [Port, N]),
+    {noreply, State};
+
+handle_info({Port, {data, {eol, Line}}}, State) ->
+    io:format(user, "~p: ~p~n", [Port, Line]),
     {noreply, State};
 
 handle_info(Info, State) ->
@@ -96,6 +90,11 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+create(#jail { zfs_dataset = Dataset, image = Image} = Jail) ->
+    0 = mindflayer_zfs:clone(Image, Dataset),
+    create_(Jail).
+
+
 create_(#jail{name=Name, path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     %mindflayer_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
@@ -122,7 +121,6 @@ destroy_(#jail{name=Name, path=Path}) ->
 
 
 umount_devfs(JailPath) ->
-    %% Try using devfs instead
     case mindflayer_utils:exec("/sbin/umount " ++ JailPath ++ "/dev") of
         "" ->
             umount_devfs(JailPath);
