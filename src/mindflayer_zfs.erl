@@ -16,7 +16,7 @@ create(Dataset) ->
 
 
 destroy_force(Dataset) ->
-    zfs(["destroy", "-f", Dataset]).
+    zfs(["destroy", "-rf", Dataset]).
 
 
 destroy(Dataset) ->
@@ -52,7 +52,7 @@ zfs(Args) ->
 create_clone_test() ->
     ZRootTest =?ZROOT ++ "/test",
     0 = create(ZRootTest),
-    0 = clone(?BASEJAIL_IMAGE, ZRootTest ++ "/zfs_test"),
+    0 = clone(?BASEJAIL_IMAGE ++ "@image", ZRootTest ++ "/zfs_test"),
     0 = snapshot(ZRootTest ++ "/zfs_test@lol"),
     0 = destroy(ZRootTest ++ "/zfs_test@lol"),
     0 = destroy(ZRootTest ++ "/zfs_test"),

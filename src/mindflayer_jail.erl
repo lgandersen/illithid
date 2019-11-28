@@ -12,7 +12,8 @@
 -include_lib("mindflayer.hrl").
 
 %% API
--export([start_link/1,
+-export([start_jail/1,
+        start_and_finish_jail/1,
         destroy/1,
         umount_devfs/1]).
 
@@ -35,8 +36,16 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link([Jail]) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [Jail], []).
+start_jail([Jail]) ->
+    gen_server:start_link(?MODULE, [Jail], []).
+
+start_and_finish_jail([#jail {path = Path } = Jail]) ->
+    gen_server:start_link(?MODULE, [Jail, self()], []),
+    receive
+        {ok, {exit_status, N}} ->
+            umount_devfs(Path),
+            {ok, {exit_status, N}}
+    end.
 
 destroy(Jail) ->
     gen_server:cast(?SERVER, {destroy, Jail}).
@@ -45,6 +54,10 @@ destroy(Jail) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
+init([Jail, CallerPid]) ->
+    Port = create(Jail),
+    {ok, #state{ jail_config = Jail, port=Port, caller = CallerPid }};
+
 init([Jail]) ->
     %JailTable = ets:new(jail_table, [protected, {keypos, 1}]),
     Port = create(Jail),
@@ -65,10 +78,14 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({Port, {exit_status, N}}, State) ->
+handle_info({Port, {exit_status, N}}, #state { caller = none } = State) ->
     %true = ets:match_delete(Table, #jail{ port = Port }),
     io:format(user, "Port ~p exited with status ~p~n", [Port, N]),
     {noreply, State};
+
+handle_info({Port, {exit_status, N}}, #state { caller = Caller } = State) ->
+    Caller ! {ok, {exit_status, N}},
+    handle_info({Port, {exit_status, N}}, State#state { caller = none });
 
 handle_info({Port, {data, {eol, Line}}}, State) ->
     io:format(user, "~p: ~p~n", [Port, Line]),
@@ -91,7 +108,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 create(#jail { zfs_dataset = Dataset, image = Image} = Jail) ->
-    0 = mindflayer_zfs:clone(Image, Dataset),
+    0 = mindflayer_zfs:clone(Image ++ "@image", Dataset),
     create_(Jail).
 
 
