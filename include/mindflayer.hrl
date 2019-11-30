@@ -1,5 +1,5 @@
 -define(ZROOT, "zroot/mindflayer_dev").
--define(BASEJAIL_IMAGE, "zroot/mindflayer_dev/basejail"). %default image-snap to use when cloning: '@image'
+-define(BASEJAIL_IMAGE, "zroot/mindflayer_basejail"). %default image-snap to use when cloning: '@image'
 
 -record(jail, {
           name         = none,
