@@ -59,9 +59,11 @@ parse_([], Tokens) ->
     {ok, lists:reverse(Tokens)}.
 
 
-log_and_proceed(Token, Tokens, Rest) ->
+log_and_proceed({Type, BinaryValue}, Tokens, Rest) ->
+    Value = binary:bin_to_list(BinaryValue),
+    Token = {Type, string:strip(Value, both)},
     io:format(user, "~p~n", [Token]),
-    parse_(Rest, [Token | Tokens]).
+    parse_(Rest, [ Token | Tokens ]).
 
 
 -ifdef(TEST).
