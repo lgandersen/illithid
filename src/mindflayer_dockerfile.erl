@@ -6,15 +6,26 @@
 parse(FileName) ->
     {ok, File} = file:read_file(FileName),
     Lines = binary:split(File, <<"\n">>, [global]),
-    parse_(Lines, []),
+    {ok, Tokens} = parse_(Lines, []),
+    ok = starts_with_from_instruction(Tokens),
+    {ok, Tokens}.
+
+
+starts_with_from_instruction([{arg, _} | Rest]) ->
+    starts_with_from_instruction(Rest);
+
+starts_with_from_instruction([{from, _} | _Rest]) ->
     ok.
 
 
 parse_([<<"">> | Rest], Tokens) ->
     parse_(Rest, Tokens);
 
-parse_([<<"#", Comment/binary>> | Rest], Tokens) ->
-    log_and_proceed({comment, Comment}, Tokens, Rest);
+parse_([<<"#", _Comment/binary>> | Rest], Tokens) ->
+    parse_(Rest, Tokens);
+
+parse_([<<"ARG", Args/binary>> | Rest], Tokens) ->
+    log_and_proceed({arg, Args}, Tokens, Rest);
 
 parse_([<<"FROM", Args/binary>> | Rest], Tokens) ->
     log_and_proceed({from, Args}, Tokens, Rest);
@@ -45,7 +56,7 @@ parse_([Line | Rest], Tokens) ->
     log_and_proceed({unparsed, Line}, Tokens, Rest);
 
 parse_([], Tokens) ->
-    {ok, Tokens}.
+    {ok, lists:reverse(Tokens)}.
 
 
 log_and_proceed(Token, Tokens, Rest) ->
@@ -56,5 +67,5 @@ log_and_proceed(Token, Tokens, Rest) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 parse_test() ->
-    ok = parse("./test/eunit_data/Dockerfile").
+    {ok, Tokens} = parse("./test/eunit_data/Dockerfile").
 -endif.
