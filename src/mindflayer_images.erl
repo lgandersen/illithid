@@ -54,7 +54,7 @@ handle_call({create_image, {Cmd, CmdArgs, Parent, Destination}}, _From, State) -
               image        = Parent, %TODO FIXME image and zfs_dataset have overlapping meaning. Resolve this.
               path         = "/" ++ Destination, %% Relying on mountpoint and dataset structure are equal
               zfs_dataset  = Destination,
-              parameters   =["mount.devfs", "ip4.addr=10.13.37.3"],
+              parameters   = ["mount.devfs", "ip4.addr=10.13.37.3"],
               command      = Cmd,
               command_args = CmdArgs
              },
