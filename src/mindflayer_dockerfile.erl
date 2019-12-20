@@ -16,8 +16,23 @@ parse(FileRaw) when is_binary(FileRaw) ->
     lists:map(fun parse_/1, Tokens).
 
 
-parse_({run, Cmd}) ->
-    {run, binary:bin_to_list(Cmd)};
+parse_({run, <<"[", CmdAsExec/binary>>}) ->
+
+    true = binary:last(<<"]">>) =:= binary:last(CmdAsExec),
+
+    Cmds = binary:replace(
+             binary:replace(CmdAsExec, <<"]">>, <<"">>),
+             <<"\"">>, <<"">>, [global]
+            ),
+    [Cmd | CmdArgs] = string:tokens(
+             binary:bin_to_list(Cmds),
+             ","),
+    {run, Cmd, lists:map(fun string:strip/1, CmdArgs)};
+
+parse_({run, CmdAsShell}) ->
+    Cmd = "/bin/sh",
+    CmdArgs = ["-c", binary:bin_to_list(CmdAsShell)],
+    {run, Cmd, CmdArgs};
 
 parse_({from, Args}) ->
     io:format(user, "parse: ~p~n", [{from, Args}]),
@@ -95,8 +110,11 @@ instruction_from_test() ->
 
 
 instruction_run_test() ->
-    FileRaw = <<"# Testing\nFROM lol\nRUN cat lol.txt">>,
-    [{from, _}, {run, "cat lol.txt"}] = parse(FileRaw).
+    FileRaw1 = <<"# Testing\nFROM lol\nRUN cat lol.txt">>,
+    [{from, _}, {run, "/bin/sh", ["-c", "cat lol.txt"]}] = parse(FileRaw1),
+
+    FileRaw2 = <<"# Testing\nFROM lol\nRUN [\"/bin/sh\", \"-c\", \"cat lol.txt\"]">>,
+    [{from, _}, {run, "/bin/sh", ["-c", "cat lol.txt"]}] = parse(FileRaw2).
 
 
 instruction_expose_test() ->
