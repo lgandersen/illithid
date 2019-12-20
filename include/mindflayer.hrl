@@ -12,7 +12,7 @@
 
 
 -record(image, {
-         id             = none,
-         dataset        = base, %dataset when base is used it refers to ?BASEJAIL_IMAGE (is referenced in Dockerfiles with "FROM scratch")
-         parent_dataset = none  %dataset
+         id        = none, % when id i set to 'base' it refers to dataset ?BASEJAIL_IMAGE (is referenced in Dockerfiles with "FROM scratch")
+         parent_id = none,
+         location  = none
          }).

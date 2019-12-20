@@ -66,13 +66,13 @@ create_image(_Config) ->
     mindflayer_images:start_link(),
     Cmd = "/bin/sh",
     CmdArgs = ["-c", "echo 'lol' > /root/test.txt"],
-    Parent = ?BASEJAIL_IMAGE,
-    {ok, #image{ dataset = ImageDataset }} = mindflayer_images:create_image(Cmd, CmdArgs, Parent),
-    {ok, <<"lol\n">>} = file:read_file("/" ++ ImageDataset ++ "/root/test.txt"),
-    mindflayer_zfs:destroy(ImageDataset ++ "@image"),
+    ParentImageId = base,
+    {ok, #image{ location = ImageLocation }} = mindflayer_images:create_image(Cmd, CmdArgs, ParentImageId),
+    [Path | _Rest] = string:split(ImageLocation, "@image"),
+    {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
+    mindflayer_zfs:destroy(ImageLocation),
     ok.
 
 start_image_builder(_Config) ->
     {ok, _Pid} = mindflayer_image_builder:start_link([]),
     ok.
-
