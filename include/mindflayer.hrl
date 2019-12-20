@@ -2,12 +2,9 @@
 -define(BASEJAIL_IMAGE, "zroot/mindflayer_basejail"). %default image-snap to use when cloning: '@image'
 
 -record(jail, {
-          name         = none,
           jid          = none,
           pid          = none,
           path         = none,
-          image        = none,
-          zfs_dataset  = none,
           command      = none,
           command_args = none,
           parameters   = []
@@ -15,7 +12,7 @@
 
 
 -record(image, {
-         tag         = none,
-         destination = none, %dataset
-         parent      = none  %dataset
+         id             = none,
+         dataset        = base, %dataset when base is used it refers to ?BASEJAIL_IMAGE (is referenced in Dockerfiles with "FROM scratch")
+         parent_dataset = none  %dataset
          }).

@@ -5,32 +5,36 @@
 
 -export([all/0, init_per_testcase/2, end_per_testcase/2]).
 
--export([create_jail/1, create_jail_and_wait_on_finish/1, destroy_jail/1, create_image/1]).
+-export([create_jail/1, create_jail_and_wait_on_finish/1, destroy_jail/1, create_image/1, start_image_builder/1]).
 
 
 all() -> [
           create_jail,
           create_jail_and_wait_on_finish,
           % destroy_jail,
-          create_image
+          create_image,
+          start_image_builder
          ].
 
 
 init_per_testcase(TestCase, Config) ->
     Name = atom_to_list(TestCase),
+    Dataset = ?ZROOT ++ "/" ++ Name,
+    0 = mindflayer_zfs:clone(?BASEJAIL_IMAGE ++ "@image", Dataset),
+
     Jail = #jail{
-              name= Name,
-              path= "/" ++ ?ZROOT ++ "/" ++ Name, %% Atm mindflayer_jail is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
-              zfs_dataset = ?ZROOT ++ "/" ++ Name,
-              image = ?BASEJAIL_IMAGE,
+              path= "/" ++ Dataset, %% Atm mindflayer_jail is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
               parameters=["mount.devfs", "ip4.addr=10.13.37.3", "exec.stop=\"/bin/sh /etc/rc.shutdown\""] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
              },
-    [{jail, Jail} | Config].
+    [{jail, Jail}, {dataset, Dataset} | Config].
 
+
+end_per_testcase(start_image_builder, _Config) ->
+    ok;
 
 end_per_testcase(_TestCase, Config) ->
-    Jail = ?config(jail, Config),
-    0 = mindflayer_zfs:destroy(Jail#jail.zfs_dataset).
+    Dataset = ?config(dataset, Config),
+    0 = mindflayer_zfs:destroy(Dataset).
 
 
 create_jail(Config) ->
@@ -58,14 +62,17 @@ destroy_jail(Config) ->
     ok.
 
 
-create_image(Config) ->
+create_image(_Config) ->
     mindflayer_images:start_link(),
-    #jail { zfs_dataset = Destination } = ?config(jail, Config),
     Cmd = "/bin/sh",
     CmdArgs = ["-c", "echo 'lol' > /root/test.txt"],
     Parent = ?BASEJAIL_IMAGE,
-    mindflayer_images:create_image(Cmd, CmdArgs, Parent, Destination),
-    {ok, <<"lol\n">>} = file:read_file("/" ++ Destination ++ "/root/test.txt"),
-    mindflayer_zfs:destroy(Destination ++ "@image"),
+    {ok, #image{ dataset = ImageDataset }} = mindflayer_images:create_image(Cmd, CmdArgs, Parent),
+    {ok, <<"lol\n">>} = file:read_file("/" ++ ImageDataset ++ "/root/test.txt"),
+    mindflayer_zfs:destroy(ImageDataset ++ "@image"),
+    ok.
+
+start_image_builder(_Config) ->
+    {ok, _Pid} = mindflayer_image_builder:start_link([]),
     ok.
 

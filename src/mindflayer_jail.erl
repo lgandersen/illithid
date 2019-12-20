@@ -107,14 +107,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-create(#jail { zfs_dataset = Dataset, image = Image} = Jail) ->
-    0 = mindflayer_zfs:clone(Image ++ "@image", Dataset),
+%create(#jail { zfs_dataset = Dataset, image = Image} = Jail) ->
+create(Jail) ->
+    %0 = mindflayer_zfs:clone(Image ++ "@image", Dataset),
     create_(Jail).
 
 
-create_(#jail{name=Name, path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
+create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     %mindflayer_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
+    Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",
     Args = ["-c",
             "path=" ++ Path,
@@ -131,10 +133,20 @@ create_(#jail{name=Name, path=Path, command=Cmd, command_args=CmdArgs, parameter
     io:format(user, "DEBUG CMD:~s~n", [DebugCmd]),
     Port.
 
-
-destroy_(#jail{name=Name, path=Path}) ->
-    mindflayer_utils:exec(io_lib:format("jail -r ~s", [Name])),
+destroy_(#jail{path=Path}) ->
+    mindflayer_utils:exec(io_lib:format("jail -r ~s", [jail_name_from_pid()])),
     umount_devfs(Path).
+
+
+jail_name_from_pid() ->
+    binary:bin_to_list(
+      binary:replace(
+        binary:replace(
+          binary:replace(
+            binary:list_to_bin(pid_to_list(self())),
+            <<"<">>, <<"mf_jail_">>),
+          <<">">>, <<"">>),
+        <<".">>, <<"_">>, [global])).
 
 
 umount_devfs(JailPath) ->
