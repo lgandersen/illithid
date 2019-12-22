@@ -11,7 +11,7 @@
 all() -> [
           create_jail,
           create_jail_and_wait_on_finish,
-          % destroy_jail,
+          %destroy_jail,
           create_layer,
           start_image_builder
          ].
@@ -70,13 +70,21 @@ create_layer(_Config) ->
     {ok, #layer{ location = LayerLocation }} = mindflayer_layers:create_layer(Cmd, CmdArgs, ParentlayerId),
     [Path | _Rest] = string:split(LayerLocation, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
-    mindflayer_zfs:destroy(layerLocation),
+    mindflayer_zfs:destroy(LayerLocation),
     ok.
 
 start_image_builder(_Config) ->
-    {ok, _Pid} = mindflayer_image_builder:start_link([]),
-    _Instructions = [
+    mindflayer_layers:start_link(),
+    Instructions = [
                     {from, base},
-                    {run, "/bin/sh", ["-c", "echo 'lol' > /root/test.txt"]}
+                    {run, "/bin/sh", ["-c", "echo 'lol1' > /root/test_1.txt"]},
+                    {run, "/bin/sh", ["-c", "echo 'lol2' > /root/test_2.txt"]}
                     ],
-    ok.
+    {ok, [#layer { location = LayerLocation2 }, #layer { location = LayerLocation1 }]} = mindflayer_image_builder:create_image(Instructions),
+
+    [Path1 | _Rest] = string:split(LayerLocation1, "@"),
+    {ok, <<"lol1\n">>} = file:read_file("/" ++ Path1 ++ "/root/test_1.txt"),
+    {error, enoent} = file:read_file("/" ++ Path1 ++ "/root/test_2.txt"),
+
+    [Path2 | _Rest] = string:split(LayerLocation2, "@"),
+    {ok, <<"lol2\n">>} = file:read_file("/" ++ Path2 ++ "/root/test_2.txt").
