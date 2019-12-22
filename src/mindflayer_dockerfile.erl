@@ -17,6 +17,7 @@ parse(FileRaw) when is_binary(FileRaw) ->
 
 
 parse_({run, <<"[", CmdAsExec/binary>>}) ->
+    %% Should support both forms of RUN according to docker docs
 
     true = binary:last(<<"]">>) =:= binary:last(CmdAsExec),
 
@@ -33,6 +34,27 @@ parse_({run, CmdAsShell}) ->
     Cmd = "/bin/sh",
     CmdArgs = ["-c", binary:bin_to_list(CmdAsShell)],
     {run, Cmd, CmdArgs};
+
+parse_({copy, <<"[", ArgsAsList/binary>>}) ->
+    %% COPY ["<src>",... "<dest>"]
+    %% TODO fix [--chown=<user>:<group>] and [--from=<name|index> optional parameters
+    true = binary:last(<<"]">>) =:= binary:last(ArgsAsList),
+    CmdsBin = binary:replace(ArgsAsList, <<"]">>, <<"">>),
+    Cmds = binary:bin_to_list(CmdsBin),
+    CmdList = string:tokens(Cmds, ","),
+    CmdListClean = lists:map(
+                     fun(Cmd) ->
+                             string:strip(string:strip(Cmd), both, $")
+                     end, CmdList),
+    {copy, CmdListClean};
+
+parse_({copy, ArgsBin}) ->
+    %% COPY <src>... <dest>
+    %% TODO fix [--chown=<user>:<group>] and [--from=<name|index> optional parameters
+    Args = binary:bin_to_list(ArgsBin),
+    ArgList = string:tokens(Args, " "),
+    {copy, ArgList};
+
 
 parse_({from, Args}) ->
     io:format(user, "parse: ~p~n", [{from, Args}]),
@@ -87,6 +109,7 @@ tokenize_line(Line) ->
         "CMD"    -> cmd;
         "USER"   -> user;
         "RUN"    -> run;
+        "COPY"   -> copy;
         UnkownInstruction ->
             io:format(user, "WARNING: Instruction '~p' not understood~n", [UnkownInstruction]),
             {unparsed, UnkownInstruction}
@@ -120,4 +143,12 @@ instruction_run_test() ->
 instruction_expose_test() ->
     FileRaw = <<"# Testing\nFROM lol\nEXPOSE 1337">>,
     [{from, _}, {expose, 1337}] = parse(FileRaw).
+
+
+instruction_copy_test() ->
+    FileRaw = <<"# Testing\nFROM lol\nCOPY [\"lol1\", \"lol2\", \"lol3\"]">>,
+    [{from, _}, {copy, ["lol1", "lol2", "lol3"]}] = parse(FileRaw),
+
+    FileRaw2 = <<"# Testing\nFROM lol\nCOPY lol1 lol2 lol3">>,
+    [{from, _}, {copy, ["lol1", "lol2", "lol3"]}] = parse(FileRaw2).
 -endif.
