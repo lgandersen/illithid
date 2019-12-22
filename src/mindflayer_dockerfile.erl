@@ -98,7 +98,7 @@ tokenize_line(Line) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 tokenize_test() ->
-    ParsedTokens = parse("./test/eunit_data/Dockerfile").
+    _ParsedTokens = parse("./test/eunit_data/Dockerfile").
 
 
 instruction_from_test() ->

@@ -107,9 +107,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-%create(#jail { zfs_dataset = Dataset, image = Image} = Jail) ->
 create(Jail) ->
-    %0 = mindflayer_zfs:clone(Image ++ "@image", Dataset),
     create_(Jail).
 
 

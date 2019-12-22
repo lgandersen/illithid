@@ -72,7 +72,7 @@ zfs(Args) ->
 create_clone_test() ->
     ZRootTest =?ZROOT ++ "/create_clone_test",
     0 = create(ZRootTest),
-    0 = clone(?BASEJAIL_IMAGE ++ "@image", ZRootTest ++ "/zfs_test"),
+    0 = clone(?BASEJAIL_IMAGE_LOCATION, ZRootTest ++ "/zfs_test"),
     0 = snapshot(ZRootTest ++ "/zfs_test@lol"),
     0 = destroy(ZRootTest ++ "/zfs_test@lol"),
     0 = destroy(ZRootTest ++ "/zfs_test"),

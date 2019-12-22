@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 2019-11-16 14:11:22.836399
 %%%-------------------------------------------------------------------
--module(mindflayer_images).
+-module(mindflayer_layers).
 
 -behaviour(gen_server).
 
@@ -14,7 +14,7 @@
 
 %% API
 -export([start_link/0,
-        create_image/3]).
+        create_layer/3]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -35,22 +35,22 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 
-create_image(Cmd, CmdArgs, ParentImageId) ->
-    gen_server:call(?SERVER, {create_image, {Cmd, CmdArgs, ParentImageId}}).
+create_layer(Cmd, CmdArgs, ParentlayerId) ->
+    gen_server:call(?SERVER, {create_layer, {Cmd, CmdArgs, ParentlayerId}}).
 
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 init([]) ->
-    ets:new(image_table, [protected, named_table, {keypos, 2}]),
-    ets:insert(image_table, [#image {id = base, location = ?BASEJAIL_IMAGE ++ "@image" }]),
+    ets:new(layer_table, [protected, named_table, {keypos, 2}]),
+    ets:insert(layer_table, [#layer {id = base, location = ?BASEJAIL_IMAGE_LOCATION }]),
     {ok, #state { counter = 0 }}.
 
 
-handle_call({create_image, {Cmd, CmdArgs, ParentImageId}}, _From, #state { counter = N } = State) ->
-    Dataset = ?ZROOT ++ "/" ++ "image_build_" ++ erlang:integer_to_list(N),
-    ParentLocation = fetch_location(ParentImageId),
+handle_call({create_layer, {Cmd, CmdArgs, ParentLayerId}}, _From, #state { counter = N } = State) ->
+    Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
+    ParentLocation = fetch_location(ParentLayerId),
     0 = mindflayer_zfs:clone(ParentLocation, Dataset),
     Jail = #jail{
               path         = "/" ++ Dataset, %% Relying on mountpoint and dataset structure are equal
@@ -59,8 +59,8 @@ handle_call({create_image, {Cmd, CmdArgs, ParentImageId}}, _From, #state { count
               command_args = CmdArgs
              },
 
-    SnapBegin = Dataset ++ "@image_init",
-    SnapEnd = Dataset ++ "@image",
+    SnapBegin = Dataset ++ "@layer_init",
+    SnapEnd = Dataset ++ "@layer",
 
     mindflayer_zfs:snapshot(SnapBegin),
     {ok, {exit_status, 0}} = mindflayer_jail:start_and_finish_jail([Jail]),
@@ -72,13 +72,13 @@ handle_call({create_image, {Cmd, CmdArgs, ParentImageId}}, _From, #state { count
     mindflayer_zfs:destroy(SnapBegin),
     mindflayer_zfs:rename(Dataset, DatasetNew),
 
-    Image = #image {
+    Layer = #layer {
                id        = DigestId,
-               parent_id = ParentImageId,
-               location  = DatasetNew ++ "@image"
+               parent_id = ParentLayerId,
+               location  = DatasetNew ++ "@layer"
               },
-    ets:insert(image_table, [Image]),
-    {reply, {ok, Image}, State#state { counter = N + 1 }};
+    ets:insert(layer_table, [Layer]),
+    {reply, {ok, Layer}, State#state { counter = N + 1 }};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -102,6 +102,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-fetch_location(ImageId) ->
-    [#image { location = Location }] = ets:lookup(image_table, ImageId),
+fetch_location(LayerId) ->
+    [#layer { location = Location }] = ets:lookup(layer_table, LayerId),
     Location.

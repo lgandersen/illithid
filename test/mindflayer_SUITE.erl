@@ -5,14 +5,14 @@
 
 -export([all/0, init_per_testcase/2, end_per_testcase/2]).
 
--export([create_jail/1, create_jail_and_wait_on_finish/1, destroy_jail/1, create_image/1, start_image_builder/1]).
+-export([create_jail/1, create_jail_and_wait_on_finish/1, destroy_jail/1, create_layer/1, start_image_builder/1]).
 
 
 all() -> [
           create_jail,
           create_jail_and_wait_on_finish,
           % destroy_jail,
-          create_image,
+          create_layer,
           start_image_builder
          ].
 
@@ -20,7 +20,7 @@ all() -> [
 init_per_testcase(TestCase, Config) ->
     Name = atom_to_list(TestCase),
     Dataset = ?ZROOT ++ "/" ++ Name,
-    0 = mindflayer_zfs:clone(?BASEJAIL_IMAGE ++ "@image", Dataset),
+    0 = mindflayer_zfs:clone(?BASEJAIL_IMAGE_LOCATION, Dataset),
 
     Jail = #jail{
               path= "/" ++ Dataset, %% Atm mindflayer_jail is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
@@ -29,7 +29,7 @@ init_per_testcase(TestCase, Config) ->
     [{jail, Jail}, {dataset, Dataset} | Config].
 
 
-end_per_testcase(start_image_builder, _Config) ->
+end_per_testcase(start_layer_builder, _Config) ->
     ok;
 
 end_per_testcase(_TestCase, Config) ->
@@ -62,17 +62,21 @@ destroy_jail(Config) ->
     ok.
 
 
-create_image(_Config) ->
-    mindflayer_images:start_link(),
+create_layer(_Config) ->
+    mindflayer_layers:start_link(),
     Cmd = "/bin/sh",
     CmdArgs = ["-c", "echo 'lol' > /root/test.txt"],
-    ParentImageId = base,
-    {ok, #image{ location = ImageLocation }} = mindflayer_images:create_image(Cmd, CmdArgs, ParentImageId),
-    [Path | _Rest] = string:split(ImageLocation, "@image"),
+    ParentlayerId = base,
+    {ok, #layer{ location = LayerLocation }} = mindflayer_layers:create_layer(Cmd, CmdArgs, ParentlayerId),
+    [Path | _Rest] = string:split(LayerLocation, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
-    mindflayer_zfs:destroy(ImageLocation),
+    mindflayer_zfs:destroy(layerLocation),
     ok.
 
 start_image_builder(_Config) ->
     {ok, _Pid} = mindflayer_image_builder:start_link([]),
+    _Instructions = [
+                    {from, base},
+                    {run, "/bin/sh", ["-c", "echo 'lol' > /root/test.txt"]}
+                    ],
     ok.
