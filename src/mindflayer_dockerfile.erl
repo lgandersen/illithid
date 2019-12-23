@@ -59,10 +59,12 @@ parse_({copy, ArgsBin}) ->
 parse_({from, Args}) ->
     io:format(user, "parse: ~p~n", [{from, Args}]),
     case binary:split(Args, <<" AS ">>, [global]) of
+        [<<"scratch">>] ->
+            {from, base};
         [Image] ->
-            {from, Image};
+            {from, binary:bin_to_list(Image)};
         [Image, Name] ->
-            {from, Image, Name}
+            {from, binary:bin_to_list(Image), binary:bin_to_list(Name)}
     end;
 
 parse_({expose, Port}) ->

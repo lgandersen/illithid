@@ -22,9 +22,4 @@
           tag    = none,
           layers = none,
           command= none
-         }
-
-%-record(image, {
-%          id = none,
-%          location = none
-%         }
+         }).

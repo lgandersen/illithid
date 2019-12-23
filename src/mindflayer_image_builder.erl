@@ -25,8 +25,8 @@
 create_image(Instructions) ->
     create_image(Instructions, "./").
 
-create_image(Instructions, Context) ->
-    State = #state { instructions = Instructions, layers = [], context = Context},
+create_image(Instructions, ContextPath) ->
+    State = #state { instructions = Instructions, layers = [], context = ContextPath},
     proces_instructions(State).
 
 
