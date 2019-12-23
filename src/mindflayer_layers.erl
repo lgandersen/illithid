@@ -35,8 +35,8 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 
-create_layer(Cmd, CmdArgs, ParentlayerId) ->
-    gen_server:call(?SERVER, {create_layer, {Cmd, CmdArgs, ParentlayerId}}).
+create_layer(LayerType, ParentLayerId, Args) ->
+    gen_server:call(?SERVER, {create_layer, {LayerType, ParentLayerId, Args}}).
 
 
 %%%===================================================================
@@ -48,7 +48,7 @@ init([]) ->
     {ok, #state { counter = 0 }}.
 
 
-handle_call({create_layer, {Cmd, CmdArgs, ParentLayerId}}, _From, #state { counter = N } = State) ->
+handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state { counter = N } = State) ->
     Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
     ParentLocation = fetch_location(ParentLayerId),
     0 = mindflayer_zfs:clone(ParentLocation, Dataset),
@@ -69,6 +69,33 @@ handle_call({create_layer, {Cmd, CmdArgs, ParentLayerId}}, _From, #state { count
     {ok, DigestId} = mindflayer_zfs:fingerprint(SnapBegin, SnapEnd),
     DatasetNew = ?ZROOT ++ "/" ++ DigestId,
 
+    mindflayer_zfs:rename(Dataset, DatasetNew),
+
+    Layer = #layer {
+               id        = DigestId,
+               parent_id = ParentLayerId,
+               location  = DatasetNew ++ "@layer"
+              },
+    ets:insert(layer_table, [Layer]),
+    {reply, {ok, Layer}, State#state { counter = N + 1 }};
+
+handle_call({create_layer, {copy, ParentLayerId, [ContextRoot, SrcAndDest]}}, _From, #state { counter = N } = State) ->
+    Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
+    ParentLocation = fetch_location(ParentLayerId),
+    0 = mindflayer_zfs:clone(ParentLocation, Dataset),
+
+    SnapBegin = Dataset ++ "@layer_init",
+    SnapEnd = Dataset ++ "@layer",
+
+    mindflayer_zfs:snapshot(SnapBegin),
+
+    copy_files(ContextRoot, "/" ++ Dataset, SrcAndDest), %TODO Dataset should be a mountpoint instead
+
+    mindflayer_zfs:snapshot(SnapEnd),
+
+    {ok, DigestId} = mindflayer_zfs:fingerprint(SnapBegin, SnapEnd),
+    DatasetNew = ?ZROOT ++ "/" ++ DigestId,
+
     mindflayer_zfs:destroy(SnapBegin),
     mindflayer_zfs:rename(Dataset, DatasetNew),
 
@@ -79,6 +106,7 @@ handle_call({create_layer, {Cmd, CmdArgs, ParentLayerId}}, _From, #state { count
               },
     ets:insert(layer_table, [Layer]),
     {reply, {ok, Layer}, State#state { counter = N + 1 }};
+
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -105,3 +133,41 @@ code_change(_OldVsn, State, _Extra) ->
 fetch_location(LayerId) ->
     [#layer { location = Location }] = ets:lookup(layer_table, LayerId),
     Location.
+
+
+copy_files(ContextRoot, JailRoot, SrcAndDest) ->
+    true = lists:all(fun verify_depth/1, SrcAndDest),
+    Dest = JailRoot ++ lists:last(SrcAndDest),
+    SrcList = lists:map(fun(Src) -> ContextRoot ++ "/" ++ Src end, lists:droplast(SrcAndDest)),
+
+    Port = open_port({spawn_executable, "/bin/cp"}, [exit_status, {line, 1024}, {args, lists:reverse([Dest | SrcList])}]),
+    receive
+        {Port, {exit_status, N}} ->
+            io:format(user, "LEL ~p~n", [N]);
+
+        {Port, Other} ->
+            io:format(user, "LOL ~p~n", [Other])
+    end.
+
+
+verify_depth(Path) ->
+    case verify_depth_(string:tokens(Path, "/"), 0) of
+        ok ->
+            true;
+
+        below_root ->
+            false
+    end.
+
+
+verify_depth_([".." | _Rest], 0) ->
+    below_root;
+
+verify_depth_([".." | Rest], Count) ->
+    verify_depth_(Rest, Count - 1);
+
+verify_depth_([_Dir | Rest], Count) ->
+    verify_depth_(Rest, Count + 1);
+
+verify_depth_([], _Count) ->
+    ok.

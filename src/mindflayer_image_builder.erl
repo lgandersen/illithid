@@ -11,10 +11,11 @@
 -include_lib("mindflayer.hrl").
 
 %% API
--export([create_image/1]).
+-export([create_image/1, create_image/2]).
 
 -record(state, {
           instructions = none,
+          context      = none,
           parent_layer = none,
           layers       = none,
           caller       = none
@@ -22,7 +23,10 @@
 
 
 create_image(Instructions) ->
-    State = #state { instructions = Instructions, layers = []},
+    create_image(Instructions, "./").
+
+create_image(Instructions, Context) ->
+    State = #state { instructions = Instructions, layers = [], context = Context},
     proces_instructions(State).
 
 
@@ -39,8 +43,21 @@ proces_instructions(#state {
                        layers       = Layers
                        } = State) ->
 
-    io:format(user, "Running command: \"~p ~p\"~n", [Cmd, CmdArgs]),
-    {ok, #layer { id = ImageId } = Layer} = mindflayer_layers:create_layer(Cmd, CmdArgs, ParentImageId),
+    {ok, #layer { id = ImageId } = Layer} = mindflayer_layers:create_layer(run, ParentImageId, [Cmd, CmdArgs]),
+    NewState = State#state {
+                 instructions = Rest,
+                 parent_layer = ImageId,
+                 layers       = [ Layer | Layers ]},
+    proces_instructions(NewState);
+
+proces_instructions(#state {
+                       instructions = [ {copy, DestAndSrc} | Rest ],
+                       parent_layer = ParentImageId,
+                       layers       = Layers,
+                       context      = Context
+                       } = State) ->
+
+    {ok, #layer { id = ImageId } = Layer} = mindflayer_layers:create_layer(copy, ParentImageId, [Context, DestAndSrc]),
     NewState = State#state {
                  instructions = Rest,
                  parent_layer = ImageId,
@@ -48,4 +65,4 @@ proces_instructions(#state {
     proces_instructions(NewState);
 
 proces_instructions(#state { instructions = [], layers = Layers }) ->
-    {ok, Layers}.
+    {ok, lists:reverse(Layers)}.

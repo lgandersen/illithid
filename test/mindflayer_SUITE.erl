@@ -5,15 +5,23 @@
 
 -export([all/0, init_per_testcase/2, end_per_testcase/2]).
 
--export([create_jail/1, create_jail_and_wait_on_finish/1, destroy_jail/1, create_layer/1, start_image_builder/1]).
+-export([
+         create_jail/1,
+         create_jail_and_wait_on_finish/1,
+         destroy_jail/1,
+         create_layer_with_run_instruction/1,
+         create_layer_with_copy_instruction/1,
+         test_image_builder/1
+        ]).
 
 
 all() -> [
           create_jail,
           create_jail_and_wait_on_finish,
           %destroy_jail,
-          create_layer,
-          start_image_builder
+          create_layer_with_run_instruction,
+          create_layer_with_copy_instruction,
+          test_image_builder
          ].
 
 
@@ -62,29 +70,64 @@ destroy_jail(Config) ->
     ok.
 
 
-create_layer(_Config) ->
+create_layer_with_run_instruction(_Config) ->
     mindflayer_layers:start_link(),
-    Cmd = "/bin/sh",
-    CmdArgs = ["-c", "echo 'lol' > /root/test.txt"],
     ParentlayerId = base,
-    {ok, #layer{ location = LayerLocation }} = mindflayer_layers:create_layer(Cmd, CmdArgs, ParentlayerId),
+    Args = ["/bin/sh", ["-c", "echo 'lol' > /root/test.txt"]],
+
+    {ok, #layer { location = LayerLocation }} = mindflayer_layers:create_layer(run, ParentlayerId, Args),
+
     [Path | _Rest] = string:split(LayerLocation, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
     mindflayer_zfs:destroy(LayerLocation),
     ok.
 
-start_image_builder(_Config) ->
+
+create_layer_with_copy_instruction(_Config) ->
     mindflayer_layers:start_link(),
+
+    %% Create context:
+    Context = create_test_context("test_context"),
+    ParentlayerId = base,
+    Args = [Context, ["test.txt", "/root/"]],
+    {ok, #layer{ location = LayerLocation }} = mindflayer_layers:create_layer(copy, ParentlayerId, Args),
+
+    [Path | _Rest] = string:split(LayerLocation, "@"),
+    {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
+    mindflayer_zfs:destroy(LayerLocation),
+    ok.
+
+
+test_image_builder(_Config) ->
+    mindflayer_layers:start_link(),
+    Context = create_test_context("test_image_builder_copy"),
     Instructions = [
                     {from, base},
-                    {run, "/bin/sh", ["-c", "echo 'lol1' > /root/test_1.txt"]},
-                    {run, "/bin/sh", ["-c", "echo 'lol2' > /root/test_2.txt"]}
+                    {copy, ["test.txt", "/root/"]},                             % Layer1
+                    {run, "/bin/sh", ["-c", "echo 'lol1' > /root/test_1.txt"]}, % Layer2
+                    {run, "/bin/sh", ["-c", "echo 'lol2' > /root/test_2.txt"]}  % Layer3
                     ],
-    {ok, [#layer { location = LayerLocation2 }, #layer { location = LayerLocation1 }]} = mindflayer_image_builder:create_image(Instructions),
+    {ok, [#layer { location = LayerLocation1 }, #layer { location = LayerLocation2 }, #layer { location = LayerLocation3 }]} = mindflayer_image_builder:create_image(Instructions, Context),
 
     [Path1 | _Rest] = string:split(LayerLocation1, "@"),
-    {ok, <<"lol1\n">>} = file:read_file("/" ++ Path1 ++ "/root/test_1.txt"),
+    {ok, <<"lol\n">>} = file:read_file("/" ++ Path1 ++ "/root/test.txt"),
+    {error, enoent} = file:read_file("/" ++ Path1 ++ "/root/test_1.txt"),
     {error, enoent} = file:read_file("/" ++ Path1 ++ "/root/test_2.txt"),
 
     [Path2 | _Rest] = string:split(LayerLocation2, "@"),
-    {ok, <<"lol2\n">>} = file:read_file("/" ++ Path2 ++ "/root/test_2.txt").
+    {ok, <<"lol\n">>} = file:read_file("/" ++ Path2 ++ "/root/test.txt"),
+    {ok, <<"lol1\n">>} = file:read_file("/" ++ Path2 ++ "/root/test_1.txt"),
+    {error, enoent} = file:read_file("/" ++ Path2 ++ "/root/test_2.txt"),
+
+    [Path3 | _Rest] = string:split(LayerLocation3, "@"),
+    {ok, <<"lol\n">>} = file:read_file("/" ++ Path3 ++ "/root/test.txt"),
+    {ok, <<"lol1\n">>} = file:read_file("/" ++ Path3 ++ "/root/test_1.txt"),
+    {ok, <<"lol2\n">>} = file:read_file("/" ++ Path3 ++ "/root/test_2.txt").
+
+
+create_test_context(Name) ->
+    ContextDataset = ?ZROOT ++ "/" ++ Name,
+    ContextRoot = "/" ++ ContextDataset,
+    mindflayer_zfs:create(ContextDataset),
+    [] = os:cmd("echo 'lol' > " ++ ContextRoot ++ "/test.txt"),
+    ContextRoot.

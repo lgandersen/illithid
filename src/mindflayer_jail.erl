@@ -59,7 +59,6 @@ init([Jail, CallerPid]) ->
     {ok, #state{ jail_config = Jail, port=Port, caller = CallerPid }};
 
 init([Jail]) ->
-    %JailTable = ets:new(jail_table, [protected, {keypos, 1}]),
     Port = create(Jail),
     {ok, #state{ jail_config = Jail, port=Port }}.
 
@@ -71,7 +70,6 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({destroy, Jail}, State) ->
     destroy_(Jail),
-    %true = ets:delete(Table, Name),
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -79,7 +77,6 @@ handle_cast(_Msg, State) ->
 
 
 handle_info({Port, {exit_status, N}}, #state { caller = none } = State) ->
-    %true = ets:match_delete(Table, #jail{ port = Port }),
     io:format(user, "Port ~p exited with status ~p~n", [Port, N]),
     {noreply, State};
 
