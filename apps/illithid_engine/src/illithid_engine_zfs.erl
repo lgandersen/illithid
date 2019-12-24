@@ -1,4 +1,4 @@
--module(mindflayer_zfs).
+-module(illithid_engine_zfs).
 
 -export([
          zfs/1,
@@ -38,7 +38,6 @@ clone(Snapshot, CloneName) ->
 
 
 fingerprint(SnapshotBegin, SnapshotEnd) ->
-    %% This snapshotting-mechanism uses the entire dataset which is very inefficient
     Cmd = "/bin/sh",
     CmdArgs = ["-c", "/sbin/zfs send -i " ++ SnapshotBegin ++ " " ++ SnapshotEnd ++ " | sha256"],
     Port = open_port({spawn_executable, Cmd}, [exit_status, {line, 1024}, {args, CmdArgs}]),
@@ -67,7 +66,7 @@ zfs(Args) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("mindflayer.hrl").
+-include_lib("include/illithid.hrl").
 
 create_clone_test() ->
     ZRootTest =?ZROOT ++ "/create_clone_test",

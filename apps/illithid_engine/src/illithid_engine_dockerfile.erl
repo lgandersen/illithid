@@ -1,4 +1,4 @@
--module(mindflayer_dockerfile).
+-module(illithid_engine_dockerfile).
 
 -export([
          tokenize/1,
@@ -123,15 +123,16 @@ tokenize_line(Line) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 tokenize_test() ->
-    _ParsedTokens = parse("./test/eunit_data/Dockerfile").
+    io:format(user, "LOOOL~p~n", [file:get_cwd()]),
+    _ParsedTokens = parse("./apps/illithid_engine/test/eunit_data/Dockerfile").
 
 
 instruction_from_test() ->
     FileRaw1 = <<"# Testing\nFROM lol\n# One more comment">>,
-    [{from, <<"lol">>}] = parse(FileRaw1),
+    [{from, "lol"}] = parse(FileRaw1),
 
     FileRaw2 = <<"# Testing\nFROM lol AS maxlol\n# One more comment">>,
-    [{from, <<"lol">>, <<"maxlol">>}] = parse(FileRaw2).
+    [{from, "lol", "maxlol"}] = parse(FileRaw2).
 
 
 instruction_run_test() ->

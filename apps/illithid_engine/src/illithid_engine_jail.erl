@@ -5,11 +5,11 @@
 %%% This gen_server manages jails: Creates, destroys and monitor jails.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mindflayer_jail).
+-module(illithid_engine_jail).
 
 -behaviour(gen_server).
 
--include_lib("mindflayer.hrl").
+-include_lib("include/illithid.hrl").
 
 %% API
 -export([start_jail/1,
@@ -110,7 +110,7 @@ create(Jail) ->
 
 create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
-    %mindflayer_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
+    %illithid_engine_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
     Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",
     Args = ["-c",
@@ -129,7 +129,7 @@ create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameter
     Port.
 
 destroy_(#jail{path=Path}) ->
-    mindflayer_utils:exec(io_lib:format("jail -r ~s", [jail_name_from_pid()])),
+    illithid_engine_utils:exec(io_lib:format("jail -r ~s", [jail_name_from_pid()])),
     umount_devfs(Path).
 
 
@@ -145,7 +145,7 @@ jail_name_from_pid() ->
 
 
 umount_devfs(JailPath) ->
-    case mindflayer_utils:exec("/sbin/umount " ++ JailPath ++ "/dev") of
+    case illithid_engine_utils:exec("/sbin/umount " ++ JailPath ++ "/dev") of
         "" ->
             umount_devfs(JailPath);
         OutPut ->

@@ -1,9 +1,9 @@
 %%%-------------------------------------------------------------------
-%% @doc mindflayer top level supervisor.
+%% @doc illithid_engine top level supervisor.
 %% @end
 %%%-------------------------------------------------------------------
 
--module(mindflayer_sup).
+-module(illithid_engine_sup).
 
 -behaviour(supervisor).
 

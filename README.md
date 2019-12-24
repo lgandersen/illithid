@@ -1,7 +1,7 @@
-mindflayer
+Illithid
 =====
 
-A recreation project playing around with jails and docker-like orchestration.
+A recreational project playing around with jails and docker-like container management.
 
 Build
 -----

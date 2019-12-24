@@ -1,4 +1,4 @@
--module(mindflayer_utils).
+-module(illithid_engine_utils).
 
 -export([exec/1]).
 

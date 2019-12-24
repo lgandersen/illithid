@@ -6,11 +6,11 @@
 %%% @end
 %%% Created : 2019-11-16 14:11:22.836399
 %%%-------------------------------------------------------------------
--module(mindflayer_layers).
+-module(illithid_engine_layer).
 
 -behaviour(gen_server).
 
--include_lib("mindflayer.hrl").
+-include_lib("include/illithid.hrl").
 
 %% API
 -export([start_link/0,
@@ -51,7 +51,7 @@ init([]) ->
 handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state { counter = N } = State) ->
     Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
     ParentLocation = fetch_location(ParentLayerId),
-    0 = mindflayer_zfs:clone(ParentLocation, Dataset),
+    0 = illithid_engine_zfs:clone(ParentLocation, Dataset),
     Jail = #jail{
               path         = "/" ++ Dataset, %% Relying on mountpoint and dataset structure are equal
               parameters   = ["mount.devfs", "ip4.addr=10.13.37.3"],
@@ -62,14 +62,14 @@ handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state 
     SnapBegin = Dataset ++ "@layer_init",
     SnapEnd = Dataset ++ "@layer",
 
-    mindflayer_zfs:snapshot(SnapBegin),
-    {ok, {exit_status, 0}} = mindflayer_jail:start_and_finish_jail([Jail]),
-    mindflayer_zfs:snapshot(SnapEnd),
+    illithid_engine_zfs:snapshot(SnapBegin),
+    {ok, {exit_status, 0}} = illithid_engine_jail:start_and_finish_jail([Jail]),
+    illithid_engine_zfs:snapshot(SnapEnd),
 
-    {ok, DigestId} = mindflayer_zfs:fingerprint(SnapBegin, SnapEnd),
+    {ok, DigestId} = illithid_engine_zfs:fingerprint(SnapBegin, SnapEnd),
     DatasetNew = ?ZROOT ++ "/" ++ DigestId,
 
-    mindflayer_zfs:rename(Dataset, DatasetNew),
+    illithid_engine_zfs:rename(Dataset, DatasetNew),
 
     Layer = #layer {
                id        = DigestId,
@@ -82,22 +82,22 @@ handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state 
 handle_call({create_layer, {copy, ParentLayerId, [ContextRoot, SrcAndDest]}}, _From, #state { counter = N } = State) ->
     Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
     ParentLocation = fetch_location(ParentLayerId),
-    0 = mindflayer_zfs:clone(ParentLocation, Dataset),
+    0 = illithid_engine_zfs:clone(ParentLocation, Dataset),
 
     SnapBegin = Dataset ++ "@layer_init",
     SnapEnd = Dataset ++ "@layer",
 
-    mindflayer_zfs:snapshot(SnapBegin),
+    illithid_engine_zfs:snapshot(SnapBegin),
 
     copy_files(ContextRoot, "/" ++ Dataset, SrcAndDest), %TODO Dataset should be a mountpoint instead
 
-    mindflayer_zfs:snapshot(SnapEnd),
+    illithid_engine_zfs:snapshot(SnapEnd),
 
-    {ok, DigestId} = mindflayer_zfs:fingerprint(SnapBegin, SnapEnd),
+    {ok, DigestId} = illithid_engine_zfs:fingerprint(SnapBegin, SnapEnd),
     DatasetNew = ?ZROOT ++ "/" ++ DigestId,
 
-    mindflayer_zfs:destroy(SnapBegin),
-    mindflayer_zfs:rename(Dataset, DatasetNew),
+    illithid_engine_zfs:destroy(SnapBegin),
+    illithid_engine_zfs:rename(Dataset, DatasetNew),
 
     Layer = #layer {
                id        = DigestId,

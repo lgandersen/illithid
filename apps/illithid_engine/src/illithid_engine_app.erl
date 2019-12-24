@@ -1,16 +1,16 @@
 %%%-------------------------------------------------------------------
-%% @doc mindflayer public API
+%% @doc illithid public API
 %% @end
 %%%-------------------------------------------------------------------
 
--module(mindflayer_app).
+-module(illithid_engine_app).
 
 -behaviour(application).
 
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
-    mindflayer_sup:start_link().
+    illithid_sup:start_link().
 
 stop(_State) ->
     ok.

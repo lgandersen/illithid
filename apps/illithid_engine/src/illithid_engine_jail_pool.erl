@@ -1,4 +1,4 @@
--module(mindflayer_jail_pool).
+-module(illithid_engine_jail_pool).
 -behaviour(supervisor).
 
 %% API.
@@ -39,11 +39,11 @@ init([]) ->
       period => 10
      },
     ChildSpec = #{
-      id => mindflayer_jail,
-      start => {mindflayer_jail, start_link, []},
+      id => illithid_engine_jail,
+      start => {illithid_engine_jail, start_link, []},
       restart => temporary,
       shutdown => 5000,
       type => worker,
-      modules => [mindflayer_jail]
+      modules => [illithid_engine_jail]
      },
     {ok, {SupFlags, [ChildSpec]}}.

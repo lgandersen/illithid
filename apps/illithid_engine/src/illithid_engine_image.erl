@@ -6,9 +6,9 @@
 %%% @end
 %%% Created : 2019-12-15 10:00:19.045431
 %%%-------------------------------------------------------------------
--module(mindflayer_image_builder).
+-module(illithid_engine_image).
 
--include_lib("mindflayer.hrl").
+-include_lib("include/illithid.hrl").
 
 %% API
 -export([create_image/1, create_image/2]).
@@ -43,7 +43,7 @@ proces_instructions(#state {
                        layers       = Layers
                        } = State) ->
 
-    {ok, #layer { id = ImageId } = Layer} = mindflayer_layers:create_layer(run, ParentImageId, [Cmd, CmdArgs]),
+    {ok, #layer { id = ImageId } = Layer} = illithid_engine_layer:create_layer(run, ParentImageId, [Cmd, CmdArgs]),
     NewState = State#state {
                  instructions = Rest,
                  parent_layer = ImageId,
@@ -57,7 +57,7 @@ proces_instructions(#state {
                        context      = Context
                        } = State) ->
 
-    {ok, #layer { id = ImageId } = Layer} = mindflayer_layers:create_layer(copy, ParentImageId, [Context, DestAndSrc]),
+    {ok, #layer { id = ImageId } = Layer} = illithid_engine_layer:create_layer(copy, ParentImageId, [Context, DestAndSrc]),
     NewState = State#state {
                  instructions = Rest,
                  parent_layer = ImageId,
@@ -65,4 +65,4 @@ proces_instructions(#state {
     proces_instructions(NewState);
 
 proces_instructions(#state { instructions = [], layers = Layers }) ->
-    {ok, lists:reverse(Layers)}.
+    {ok, Layers}.
