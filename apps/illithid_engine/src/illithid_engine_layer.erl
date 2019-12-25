@@ -35,8 +35,8 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 
-create_layer(LayerType, ParentLayerId, Args) ->
-    gen_server:call(?SERVER, {create_layer, {LayerType, ParentLayerId, Args}}).
+create_layer(Context, Instruction, ParentLayerId) ->
+    gen_server:call(?SERVER, {create_layer, {Context, Instruction, ParentLayerId}}).
 
 
 %%%===================================================================
@@ -44,32 +44,29 @@ create_layer(LayerType, ParentLayerId, Args) ->
 %%%===================================================================
 init([]) ->
     ets:new(layer_table, [protected, named_table, {keypos, 2}]),
-    ets:insert(layer_table, [#layer {id = base, location = ?BASEJAIL_IMAGE_LOCATION }]),
+    ets:insert(layer_table, [?BASE_LAYER]),
     {ok, #state { counter = 0 }}.
 
 
-handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state { counter = N } = State) ->
-    Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
-    ParentLocation = fetch_location(ParentLayerId),
-    0 = illithid_engine_zfs:clone(ParentLocation, Dataset),
-    Jail = #jail{
-              path         = "/" ++ Dataset, %% Relying on mountpoint and dataset structure are equal
-              parameters   = ["mount.devfs", "ip4.addr=10.13.37.3"],
-              command      = Cmd,
-              command_args = CmdArgs
-             },
+handle_call({create_layer, {Context, Instruction, ParentLayerId}}, _From, #state { counter = N } = State) ->
+    {ok, Dataset} = initialize_layer(ParentLayerId, N),
 
-    SnapBegin = Dataset ++ "@layer_init",
-    SnapEnd = Dataset ++ "@layer",
+    case Instruction of
+        {run, Cmd, CmdArgs} ->
+            Jail = #jail{
+                          path         = "/" ++ Dataset, %% Relying on mountpoint and dataset structure are equal
+                          parameters   = ["mount.devfs", "ip4.addr=10.13.37.3"],
+                          command      = Cmd,
+                          command_args = CmdArgs
+                         },
+            {ok, {exit_status, 0}} = illithid_engine_jail:start_and_finish_jail([Jail]);
 
-    illithid_engine_zfs:snapshot(SnapBegin),
-    {ok, {exit_status, 0}} = illithid_engine_jail:start_and_finish_jail([Jail]),
-    illithid_engine_zfs:snapshot(SnapEnd),
 
-    {ok, DigestId} = illithid_engine_zfs:fingerprint(SnapBegin, SnapEnd),
-    DatasetNew = ?ZROOT ++ "/" ++ DigestId,
+        {copy, SrcAndDest} ->
+            copy_files(Context, "/" ++ Dataset, SrcAndDest) %TODO Dataset should be a mountpoint instead
+    end,
 
-    illithid_engine_zfs:rename(Dataset, DatasetNew),
+    {ok, DigestId, DatasetNew} = finalize_layer(Dataset),
 
     Layer = #layer {
                id        = DigestId,
@@ -78,35 +75,6 @@ handle_call({create_layer, {run, ParentLayerId, [Cmd, CmdArgs]}}, _From, #state 
               },
     ets:insert(layer_table, [Layer]),
     {reply, {ok, Layer}, State#state { counter = N + 1 }};
-
-handle_call({create_layer, {copy, ParentLayerId, [ContextRoot, SrcAndDest]}}, _From, #state { counter = N } = State) ->
-    Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
-    ParentLocation = fetch_location(ParentLayerId),
-    0 = illithid_engine_zfs:clone(ParentLocation, Dataset),
-
-    SnapBegin = Dataset ++ "@layer_init",
-    SnapEnd = Dataset ++ "@layer",
-
-    illithid_engine_zfs:snapshot(SnapBegin),
-
-    copy_files(ContextRoot, "/" ++ Dataset, SrcAndDest), %TODO Dataset should be a mountpoint instead
-
-    illithid_engine_zfs:snapshot(SnapEnd),
-
-    {ok, DigestId} = illithid_engine_zfs:fingerprint(SnapBegin, SnapEnd),
-    DatasetNew = ?ZROOT ++ "/" ++ DigestId,
-
-    illithid_engine_zfs:destroy(SnapBegin),
-    illithid_engine_zfs:rename(Dataset, DatasetNew),
-
-    Layer = #layer {
-               id        = DigestId,
-               parent_id = ParentLayerId,
-               location  = DatasetNew ++ "@layer"
-              },
-    ets:insert(layer_table, [Layer]),
-    {reply, {ok, Layer}, State#state { counter = N + 1 }};
-
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -130,6 +98,25 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+-define(SnapBegin(Dataset), Dataset ++ "@layer_init").
+-define(SnapEnd(Dataset), Dataset ++ "@layer").
+
+initialize_layer(ParentLayerId, N) ->
+    Dataset = ?ZROOT ++ "/" ++ "layer_build_" ++ erlang:integer_to_list(N),
+    ParentLocation = fetch_location(ParentLayerId),
+    0 = illithid_engine_zfs:clone(ParentLocation, Dataset),
+    illithid_engine_zfs:snapshot(?SnapBegin(Dataset)),
+    {ok, Dataset}.
+
+
+finalize_layer(Dataset) ->
+    illithid_engine_zfs:snapshot(?SnapEnd(Dataset)),
+    {ok, DigestId} = illithid_engine_zfs:fingerprint(?SnapBegin(Dataset), ?SnapEnd(Dataset)),
+    DatasetNew = ?ZROOT ++ "/" ++ DigestId,
+    illithid_engine_zfs:rename(Dataset, DatasetNew),
+    {ok, DigestId, DatasetNew}.
+
+
 fetch_location(LayerId) ->
     [#layer { location = Location }] = ets:lookup(layer_table, LayerId),
     Location.

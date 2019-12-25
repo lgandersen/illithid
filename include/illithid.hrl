@@ -18,8 +18,12 @@
          }).
 
 -record(image, {
-          name   = none,
-          tag    = none,
-          layers = none,
-          command= none
+          id      = none,
+          name    = none,
+          tag     = none,
+          layers  = none,
+          command = none
          }).
+
+-define(BASE_LAYER, #layer {id = base, location = ?BASEJAIL_IMAGE_LOCATION }).
+-define(BASE_IMAGE, #image {name = "base", layers = [?BASE_LAYER]}).

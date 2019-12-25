@@ -72,10 +72,11 @@ destroy_jail(Config) ->
 
 create_layer_with_run_instruction(_Config) ->
     illithid_engine_layer:start_link(),
+    Context = "./",
     ParentlayerId = base,
-    Args = ["/bin/sh", ["-c", "echo 'lol' > /root/test.txt"]],
+    Instruction = {run, "/bin/sh", ["-c", "echo 'lol' > /root/test.txt"]},
 
-    {ok, #layer { location = LayerLocation }} = illithid_engine_layer:create_layer(run, ParentlayerId, Args),
+    {ok, #layer{ location = LayerLocation }} = illithid_engine_layer:create_layer(Context, Instruction, ParentlayerId),
 
     [Path | _Rest] = string:split(LayerLocation, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
@@ -85,12 +86,11 @@ create_layer_with_run_instruction(_Config) ->
 
 create_layer_with_copy_instruction(_Config) ->
     illithid_engine_layer:start_link(),
-
-    %% Create context:
     Context = create_test_context("test_context"),
     ParentlayerId = base,
-    Args = [Context, ["test.txt", "/root/"]],
-    {ok, #layer{ location = LayerLocation }} = illithid_engine_layer:create_layer(copy, ParentlayerId, Args),
+    Instruction = {copy, ["test.txt", "/root/"]},
+
+    {ok, #layer{ location = LayerLocation }} = illithid_engine_layer:create_layer(Context, Instruction, ParentlayerId),
 
     [Path | _Rest] = string:split(LayerLocation, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path ++ "/root/test.txt"),
@@ -100,6 +100,7 @@ create_layer_with_copy_instruction(_Config) ->
 
 test_image_builder(_Config) ->
     illithid_engine_layer:start_link(),
+    illithid_engine_image:start_link(),
     Context = create_test_context("test_image_builder_copy"),
     Instructions = [
                     {from, base},
@@ -107,7 +108,14 @@ test_image_builder(_Config) ->
                     {run, "/bin/sh", ["-c", "echo 'lol1' > /root/test_1.txt"]}, % Layer2
                     {run, "/bin/sh", ["-c", "echo 'lol2' > /root/test_2.txt"]}  % Layer3
                     ],
-    {ok, [#layer { location = LayerLocation3 }, #layer { location = LayerLocation2 }, #layer { location = LayerLocation1 }]} = illithid_engine_image:create_image(Instructions, Context),
+    Lol = illithid_engine_image:create_image(Instructions, Context),
+    io:format(user, "LOL ~p~n", [Lol]),
+    {ok, #image { layers = [
+                            #layer { location = LayerLocation3 },
+                            #layer { location = LayerLocation2 },
+                            #layer { location = LayerLocation1 }
+                           ]
+                } } = illithid_engine_image:create_image(Instructions, Context),
 
     [Path1 | _Rest] = string:split(LayerLocation1, "@"),
     {ok, <<"lol\n">>} = file:read_file("/" ++ Path1 ++ "/root/test.txt"),
