@@ -130,10 +130,10 @@ copy_files(ContextRoot, JailRoot, SrcAndDest) ->
     Port = open_port({spawn_executable, "/bin/cp"}, [exit_status, {line, 1024}, {args, lists:reverse([Dest | SrcList])}]),
     receive
         {Port, {exit_status, N}} ->
-            io:format(user, "LEL ~p~n", [N]);
+            lager:info("copy operation ended with status: ~p", [N]);
 
         {Port, Other} ->
-            io:format(user, "LOL ~p~n", [Other])
+            lager:info("Received unkown message from copying port: ~p", [Other])
     end.
 
 

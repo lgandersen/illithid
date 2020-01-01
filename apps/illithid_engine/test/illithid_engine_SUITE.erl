@@ -3,7 +3,11 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("include/illithid.hrl").
 
--export([all/0, init_per_testcase/2, end_per_testcase/2]).
+-export([all/0,
+         init_per_testcase/2,
+         end_per_testcase/2,
+         init_per_suite/1,
+         end_per_suite/1]).
 
 -export([
          create_jail/1,
@@ -18,11 +22,20 @@
 all() -> [
           create_jail,
           create_jail_and_wait_on_finish,
-          %destroy_jail,
+          %%destroy_jail,
           create_layer_with_run_instruction,
           create_layer_with_copy_instruction,
           test_image_builder
          ].
+
+
+init_per_suite(Config) ->
+    lager:start(),
+    Config.
+
+
+end_per_suite(_Config) ->
+    ok.
 
 
 init_per_testcase(TestCase, Config) ->
@@ -108,8 +121,6 @@ test_image_builder(_Config) ->
                     {run, "/bin/sh", ["-c", "echo 'lol1' > /root/test_1.txt"]}, % Layer2
                     {run, "/bin/sh", ["-c", "echo 'lol2' > /root/test_2.txt"]}  % Layer3
                     ],
-    Lol = illithid_engine_image:create_image(Instructions, Context),
-    io:format(user, "LOL ~p~n", [Lol]),
     {ok, #image { layers = [
                             #layer { location = LayerLocation3 },
                             #layer { location = LayerLocation2 },

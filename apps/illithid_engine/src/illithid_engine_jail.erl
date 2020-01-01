@@ -30,7 +30,8 @@
 -record(state, {
           caller = none,
           port =  none,
-          jail_config = none
+          jail_config = none,
+          closing_port = none
          }).
 
 %%%===================================================================
@@ -39,11 +40,11 @@
 start_jail([Jail]) ->
     gen_server:start_link(?MODULE, [Jail], []).
 
-start_and_finish_jail([#jail {path = Path } = Jail]) ->
+start_and_finish_jail([Jail]) ->
     gen_server:start_link(?MODULE, [Jail, self()], []),
     receive
         {ok, {exit_status, N}} ->
-            umount_devfs(Path),
+            umount_devfs(Jail#jail.path),
             {ok, {exit_status, N}}
     end.
 
@@ -69,15 +70,20 @@ handle_call(_Request, _From, State) ->
 
 
 handle_cast({destroy, Jail}, State) ->
-    destroy_(Jail),
-    {noreply, State};
+    Port= destroy_(Jail),
+    {noreply, State#state {closing_port = Port }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
+handle_info({Port, {exit_status, N}}, #state { closing_port = Port, jail_config = Jail } = State) ->
+    lager:info("~p: Jail shut down with exit-code: ~p", [Port, N]),
+    umount_devfs(Jail#jail.path),
+    {noreply, State};
+
 handle_info({Port, {exit_status, N}}, #state { caller = none } = State) ->
-    io:format(user, "Port ~p exited with status ~p~n", [Port, N]),
+    lager:info("Port ~p exited with status ~p", [Port, N]),
     {noreply, State};
 
 handle_info({Port, {exit_status, N}}, #state { caller = Caller } = State) ->
@@ -85,11 +91,11 @@ handle_info({Port, {exit_status, N}}, #state { caller = Caller } = State) ->
     handle_info({Port, {exit_status, N}}, State#state { caller = none });
 
 handle_info({Port, {data, {eol, Line}}}, State) ->
-    io:format(user, "~p: ~p~n", [Port, Line]),
+    lager:info("~p: Last line: ~p", [Port, Line]),
     {noreply, State};
 
 handle_info(Info, State) ->
-    io:format(user, "Unknow message received to jail manager: ~p~n", [Info]),
+    lager:warning("Unknow message received to jail manager: ~p", [Info]),
     {noreply, State}.
 
 
@@ -110,7 +116,6 @@ create(Jail) ->
 
 create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
-    %illithid_engine_utils:exec(io_lib:format("jail -c path=~p name=~p mount.devfs ip4.addr=~p command=~p", [Path, Name, IP, Cmd]) ++ Args).
     Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",
     Args = ["-c",
@@ -125,12 +130,21 @@ create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameter
                       {args, Args}
                       ]),
     DebugCmd = string:join([Executable | Args], " "),
-    io:format(user, "DEBUG CMD:~s~n", [DebugCmd]),
+    lager:info("Creating jail:~s", [DebugCmd]),
     Port.
 
-destroy_(#jail{path=Path}) ->
-    illithid_engine_utils:exec(io_lib:format("jail -r ~s", [jail_name_from_pid()])),
-    umount_devfs(Path).
+
+destroy_(_Jail) ->
+    Executable = "/usr/sbin/jail",
+    Name = jail_name_from_pid(),
+    Args = ["-c", Name],
+    Port = open_port({spawn_executable, Executable},
+                     [exit_status,
+                      {line, 1024},
+                      {args, Args}
+                      ]),
+    lager:info("~p: Shutting down jail: ~p", [Port, Args]),
+    Port.
 
 
 jail_name_from_pid() ->
@@ -145,9 +159,11 @@ jail_name_from_pid() ->
 
 
 umount_devfs(JailPath) ->
-    case illithid_engine_utils:exec("/sbin/umount " ++ JailPath ++ "/dev") of
-        "" ->
-            umount_devfs(JailPath);
-        OutPut ->
-            OutPut
+    Args = [JailPath ++ "/dev"],
+    Port = open_port({spawn_executable, "/sbin/umount"}, [exit_status, {line, 1024}, {args, Args}]),
+    lager:info("~p: Executing umount-command: ~p", [Port, Args]),
+    receive
+        {Port, {exit_status, N}} ->
+            lager:info("Umount-command finished with exit code: ~p", [N]),
+            N
     end.

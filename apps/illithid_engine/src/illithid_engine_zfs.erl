@@ -57,7 +57,7 @@ rename(Dataset, NewDataset) ->
 
 zfs(Args) ->
     Cmd = string:join(["zfs" | Args], " "),
-    io:format(user, "DEBUG CMD:~p~n", [Cmd]),
+    lager:info("Executing ZFS-command: ~p", [Cmd]),
     Port = open_port({spawn_executable, "/sbin/zfs"}, [exit_status, {line, 1024}, {args, Args}]),
     receive
         {Port, {exit_status, N}} ->
@@ -83,7 +83,6 @@ fingerprint_test() ->
     0 = snapshot(ZRootTest ++ "@lol1"),
     0 = snapshot(ZRootTest ++ "@lol2"),
     {ok, Line} = fingerprint(ZRootTest ++ "@lol1", ZRootTest ++ "@lol2"),
-    io:format(user, "What: ~p~n", [Line]),
     0 = destroy(ZRootTest ++ "@lol1"),
     0 = destroy(ZRootTest ++ "@lol2"),
     0 = destroy(ZRootTest).

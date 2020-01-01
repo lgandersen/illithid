@@ -21,12 +21,12 @@ parse_({run, <<"[", CmdAsExec/binary>>}) ->
 
     true = binary:last(<<"]">>) =:= binary:last(CmdAsExec),
 
-    Cmds = binary:replace(
+    CmdsBin = binary:replace(
              binary:replace(CmdAsExec, <<"]">>, <<"">>),
              <<"\"">>, <<"">>, [global]
             ),
     [Cmd | CmdArgs] = string:tokens(
-             binary:bin_to_list(Cmds),
+             binary:bin_to_list(CmdsBin),
              ","),
     {run, Cmd, lists:map(fun string:strip/1, CmdArgs)};
 
@@ -57,7 +57,7 @@ parse_({copy, ArgsBin}) ->
 
 
 parse_({from, Args}) ->
-    io:format(user, "parse: ~p~n", [{from, Args}]),
+    lager:info("Parser: ~p", [{from, Args}]),
     case binary:split(Args, <<" AS ">>, [global]) of
         [<<"scratch">>] ->
             {from, base};
@@ -113,45 +113,57 @@ tokenize_line(Line) ->
         "RUN"    -> run;
         "COPY"   -> copy;
         UnkownInstruction ->
-            io:format(user, "WARNING: Instruction '~p' not understood~n", [UnkownInstruction]),
+            lager:warning("WARNING: Instruction '~p' not understood~n", [UnkownInstruction]),
             {unparsed, UnkownInstruction}
     end,
-    io:format(user, "tokenize:~p~n", [{Instruction, Args}]),
+    lager:info("tokenize:~p", [{Instruction, Args}]),
     {Instruction, Args}.
 
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-tokenize_test() ->
-    io:format(user, "LOOOL~p~n", [file:get_cwd()]),
-    _ParsedTokens = parse("./apps/illithid_engine/test/eunit_data/Dockerfile").
+
+initialize() ->
+    ok.
+
+stop(_) ->
+    ok.
+
+instructions_test_() ->
+     {foreach, fun initialize/0, fun stop/1, [
+                                  fun test_general_tokenization/1,
+                                  fun test_from_instruction/1,
+                                  fun test_run_instruction_/1,
+                                  fun test_copy_instruction/1,
+                                  fun test_expose_instruction/1]
+     }.
+
+test_general_tokenization(_) ->
+    [?_assertMatch(_ParsedTokens, parse("./apps/illithid_engine/test/eunit_data/Dockerfile"))].
 
 
-instruction_from_test() ->
+test_from_instruction(_) ->
     FileRaw1 = <<"# Testing\nFROM lol\n# One more comment">>,
-    [{from, "lol"}] = parse(FileRaw1),
-
     FileRaw2 = <<"# Testing\nFROM lol AS maxlol\n# One more comment">>,
-    [{from, "lol", "maxlol"}] = parse(FileRaw2).
+    ?_assertEqual([{from, "lol"}], parse(FileRaw1)),
+    ?_assertEqual([{from, "lol", "maxlol"}], parse(FileRaw2)).
 
 
-instruction_run_test() ->
+test_run_instruction_(_) ->
     FileRaw1 = <<"# Testing\nFROM lol\nRUN cat lol.txt">>,
-    [{from, _}, {run, "/bin/sh", ["-c", "cat lol.txt"]}] = parse(FileRaw1),
-
     FileRaw2 = <<"# Testing\nFROM lol\nRUN [\"/bin/sh\", \"-c\", \"cat lol.txt\"]">>,
-    [{from, _}, {run, "/bin/sh", ["-c", "cat lol.txt"]}] = parse(FileRaw2).
+    [?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw1)),
+     ?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw2))].
 
 
-instruction_expose_test() ->
+test_expose_instruction(_) ->
     FileRaw = <<"# Testing\nFROM lol\nEXPOSE 1337">>,
-    [{from, _}, {expose, 1337}] = parse(FileRaw).
+    ?_assertEqual([{from, "lol"}, {expose, 1337}], parse(FileRaw)).
 
 
-instruction_copy_test() ->
+test_copy_instruction(_) ->
     FileRaw = <<"# Testing\nFROM lol\nCOPY [\"lol1\", \"lol2\", \"lol3\"]">>,
-    [{from, _}, {copy, ["lol1", "lol2", "lol3"]}] = parse(FileRaw),
-
     FileRaw2 = <<"# Testing\nFROM lol\nCOPY lol1 lol2 lol3">>,
-    [{from, _}, {copy, ["lol1", "lol2", "lol3"]}] = parse(FileRaw2).
+    [?_assertEqual([{from, "lol"}, {copy, ["lol1", "lol2", "lol3"]}], parse(FileRaw)),
+    ?_assertEqual([{from, "lol"}, {copy, ["lol1", "lol2", "lol3"]}], parse(FileRaw2))].
 -endif.
