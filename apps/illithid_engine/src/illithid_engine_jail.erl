@@ -29,9 +29,9 @@
 
 -record(state, {
           caller = none,
-          port =  none,
           jail_config = none,
-          closing_port = none
+          closing_port = none,
+          starting_port = none
          }).
 
 %%%===================================================================
@@ -57,11 +57,11 @@ destroy(Jail) ->
 %%%===================================================================
 init([Jail, CallerPid]) ->
     Port = create(Jail),
-    {ok, #state{ jail_config = Jail, port=Port, caller = CallerPid }};
+    {ok, #state{ jail_config = Jail, starting_port = Port, caller = CallerPid }};
 
 init([Jail]) ->
     Port = create(Jail),
-    {ok, #state{ jail_config = Jail, port=Port }}.
+    {ok, #state{ jail_config = Jail, starting_port = Port }}.
 
 
 handle_call(_Request, _From, State) ->
@@ -76,19 +76,23 @@ handle_cast({destroy, Jail}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-
 handle_info({Port, {exit_status, N}}, #state { closing_port = Port, jail_config = Jail } = State) ->
     lager:info("~p: Jail shut down with exit-code: ~p", [Port, N]),
     umount_devfs(Jail#jail.path),
-    {noreply, State};
+    %%TODO shouldn't we just exit (normally) here?
+    {noreply, State#state { closing_port = none }};
 
-handle_info({Port, {exit_status, N}}, #state { caller = none } = State) ->
-    lager:info("Port ~p exited with status ~p", [Port, N]),
-    {noreply, State};
+handle_info({Port, {exit_status, N}}, #state { caller = Caller, starting_port = Port } = State) ->
+    lager:info("Jail starting port ~p exited with status ~p", [Port, N]),
+    NewState = case Caller of
+        none ->
+            State;
 
-handle_info({Port, {exit_status, N}}, #state { caller = Caller } = State) ->
-    Caller ! {ok, {exit_status, N}},
-    handle_info({Port, {exit_status, N}}, State#state { caller = none });
+        _Pid ->
+            Caller ! {ok, {exit_status, N}},
+            State#state { caller = none }
+    end,
+    {noreply, NewState};
 
 handle_info({Port, {data, {eol, Line}}}, State) ->
     lager:info("~p: Last line: ~p", [Port, Line]),

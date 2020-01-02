@@ -82,7 +82,7 @@ fingerprint_test() ->
     0 = create(ZRootTest),
     0 = snapshot(ZRootTest ++ "@lol1"),
     0 = snapshot(ZRootTest ++ "@lol2"),
-    {ok, Line} = fingerprint(ZRootTest ++ "@lol1", ZRootTest ++ "@lol2"),
+    {ok, _Line} = fingerprint(ZRootTest ++ "@lol1", ZRootTest ++ "@lol2"),
     0 = destroy(ZRootTest ++ "@lol1"),
     0 = destroy(ZRootTest ++ "@lol2"),
     0 = destroy(ZRootTest).

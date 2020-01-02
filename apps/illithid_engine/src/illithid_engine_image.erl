@@ -32,7 +32,6 @@
           instructions = none,
           context      = none,
           parent_layer = none,
-          layers       = none,
           caller       = none,
           image_record = none
          }).
@@ -103,6 +102,14 @@ proces_instructions(#build_state { instructions = [ {from, ImageId} | Rest ] } =
                   parent_layer = ImageId
                  },
     proces_instructions(NewState);
+
+proces_instructions(#build_state { instructions = [ {cmd, Args} | Rest ], image_record = Image } = State) ->
+    NewState = State#build_state {
+                  instructions = Rest,
+                  image_record = Image#image { command = Args }
+                 },
+    proces_instructions(NewState);
+
 
 proces_instructions(#build_state {
                        instructions = [ Instruction | Rest ],
