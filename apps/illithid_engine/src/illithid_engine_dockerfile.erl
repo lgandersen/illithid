@@ -16,43 +16,24 @@ parse(FileRaw) when is_binary(FileRaw) ->
     lists:map(fun parse_/1, Tokens).
 
 
-parse_({run, <<"[", CmdAsExec/binary>>}) ->
-    %% Should support both forms of RUN according to docker docs
-
-    true = binary:last(<<"]">>) =:= binary:last(CmdAsExec),
-
-    CmdsBin = binary:replace(
-             binary:replace(CmdAsExec, <<"]">>, <<"">>),
-             <<"\"">>, <<"">>, [global]
-            ),
-    [Cmd | CmdArgs] = string:tokens(
-             binary:bin_to_list(CmdsBin),
-             ","),
-    {run, Cmd, lists:map(fun string:strip/1, CmdArgs)};
-
-parse_({run, CmdAsShell}) ->
-    Cmd = "/bin/sh",
-    CmdArgs = ["-c", binary:bin_to_list(CmdAsShell)],
+parse_({run, <<"[", _Rest/binary>> = JSONForm}) ->
+    [Cmd | CmdArgs] = decode_jsonform(JSONForm),
     {run, Cmd, CmdArgs};
 
-parse_({copy, <<"[", ArgsAsList/binary>>}) ->
-    %% COPY ["<src>",... "<dest>"]
-    %% TODO fix [--chown=<user>:<group>] and [--from=<name|index> optional parameters
-    true = binary:last(<<"]">>) =:= binary:last(ArgsAsList),
-    CmdsBin = binary:replace(ArgsAsList, <<"]">>, <<"">>),
-    Cmds = binary:bin_to_list(CmdsBin),
-    CmdList = string:tokens(Cmds, ","),
-    CmdListClean = lists:map(
-                     fun(Cmd) ->
-                             string:strip(string:strip(Cmd), both, $")
-                     end, CmdList),
-    {copy, CmdListClean};
+parse_({run, CmdAsShell}) ->
+    {run, "/bin/sh", ["-c", binary:bin_to_list(CmdAsShell)]};
+
+parse_({cmd, <<"[", _Rest/binary>> = JSONForm}) ->
+    {cmd, decode_jsonform(JSONForm)};
+
+parse_({cmd, ShellCmd}) ->
+    {cmd, ["/bin/sh", "-c", binary:bin_to_list(ShellCmd)]};
+
+parse_({copy, <<"[", _Rest/binary>> = JSONForm}) ->
+    {copy, decode_jsonform(JSONForm)};
 
 parse_({copy, ArgsBin}) ->
-    %% COPY <src>... <dest>
-    %% TODO fix [--chown=<user>:<group>] and [--from=<name|index> optional parameters
-    Args = binary:bin_to_list(ArgsBin),
-    ArgList = string:tokens(Args, " "),
+    ArgList = string:tokens(binary:bin_to_list(ArgsBin), " "),
     {copy, ArgList};
 
 
@@ -120,6 +101,10 @@ tokenize_line(Line) ->
     {Instruction, Args}.
 
 
+decode_jsonform(JSONForm) ->
+    ListOfArgs = jiffy:decode(JSONForm),
+    lists:map(fun binary:bin_to_list/1, ListOfArgs).
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -134,6 +119,7 @@ instructions_test_() ->
                                   fun test_general_tokenization/1,
                                   fun test_from_instruction/1,
                                   fun test_run_instruction_/1,
+                                  fun test_cmd_instruction_/1,
                                   fun test_copy_instruction/1,
                                   fun test_expose_instruction/1]
      }.
@@ -154,6 +140,13 @@ test_run_instruction_(_) ->
     FileRaw2 = <<"# Testing\nFROM lol\nRUN [\"/bin/sh\", \"-c\", \"cat lol.txt\"]">>,
     [?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw1)),
      ?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw2))].
+
+
+test_cmd_instruction_(_) ->
+    FileRaw1 = <<"# Testing\nFROM lol\nCMD cat lol.txt">>,
+    FileRaw2 = <<"# Testing\nFROM lol\nCMD [\"/bin/sh\", \"-c\", \"cat lol.txt\"]">>,
+    [?_assertEqual([{from, "lol"}, {cmd, ["/bin/sh", "-c", "cat lol.txt"]}], parse(FileRaw1)),
+     ?_assertEqual([{from, "lol"}, {cmd, ["/bin/sh", "-c", "cat lol.txt"]}], parse(FileRaw2))].
 
 
 test_expose_instruction(_) ->
