@@ -31,10 +31,12 @@ all() -> [
 
 init_per_suite(Config) ->
     lager:start(),
+    os:cmd("../../../default/bin/illithid clean"),
     Config.
 
 
 end_per_suite(_Config) ->
+    os:cmd("../../../default/bin/illithid clean"),
     ok.
 
 

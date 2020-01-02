@@ -16,4 +16,4 @@ main(["build", Path]) ->
     ok;
 
 main(Args) ->
-    lager:warning("Unkown command: ~p", [Args]).
+    io:format("Unkown command: ~p~n", [Args]).
