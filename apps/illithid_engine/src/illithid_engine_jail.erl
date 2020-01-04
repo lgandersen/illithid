@@ -9,8 +9,6 @@
 
 -behaviour(gen_server).
 
--include_lib("include/illithid.hrl").
-
 %% API
 -export([start_jail/1,
         start_and_finish_jail/1,
@@ -24,6 +22,8 @@
          handle_info/2,
          terminate/2,
          code_change/3]).
+
+-include_lib("include/illithid.hrl").
 
 -define(SERVER, ?MODULE).
 

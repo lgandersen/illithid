@@ -1,6 +1,7 @@
 -module(illithid_engine_zfs).
 
 -export([
+         clear_zroot/0,
          zfs/1,
          create/1,
          destroy/1,
@@ -11,6 +12,13 @@
          fingerprint/2
         ]).
 
+-include_lib("include/illithid.hrl").
+
+clear_zroot() ->
+    lager:info("Clearing zroot."),
+    0 = destroy_force(?ZROOT),
+    0 = create(?ZROOT),
+    ok.
 
 create(Dataset) ->
     % zfs create [-pu] [-o property=value]... filesystem
@@ -66,7 +74,6 @@ zfs(Args) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("include/illithid.hrl").
 
 create_clone_test() ->
     ZRootTest =?ZROOT ++ "/create_clone_test",

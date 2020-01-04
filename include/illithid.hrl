@@ -1,5 +1,8 @@
 -define(ZROOT, "zroot/mindflayer_dev").
+-define(ZROOT(Name), ?ZROOT ++ "/" ++ Name).
 -define(BASEJAIL_IMAGE_LOCATION, "zroot/mindflayer_basejail@image"). %default image-snap to use when cloning: '@image'
+
+-define(API_SOCKET, "/var/run/illithid.sock").
 
 -record(jail, {
           jid          = none,
