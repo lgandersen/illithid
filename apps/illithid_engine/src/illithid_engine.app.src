@@ -2,7 +2,7 @@
  [{description, "An OTP application"},
   {vsn, "0.1.0"},
   {registered, []},
-  {mod, {illithid_app, []}},
+  {mod, {illithid_engine_app, []}},
   {applications,
    [kernel,
     stdlib

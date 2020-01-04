@@ -10,7 +10,7 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
-    illithid_sup:start_link().
+    illithid_engine_sup:start_link().
 
 stop(_State) ->
     ok.

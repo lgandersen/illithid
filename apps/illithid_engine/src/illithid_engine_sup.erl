@@ -33,7 +33,20 @@ init([]) ->
     SupFlags = #{strategy => one_for_all,
                  intensity => 0,
                  period => 1},
-    ChildSpecs = [],
+    ChildSpecs = [#{id      => illithid_engine_api,
+                    start   => {illithid_engine_api, start_link, []}
+                   },
+                  #{id      => illithid_engine_layer,
+                    start   => {illithid_engine_layer, start_link, []}
+                   },
+                  #{id      => illithid_engine_image,
+                    start   => {illithid_engine_image, start_link, []}
+                   },
+                  #{id      => illithid_engine_jail_pool,
+                    start   => {illithid_engine_jail_pool, start_link, []},
+                    type    => supervisor
+                   }
+                 ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
