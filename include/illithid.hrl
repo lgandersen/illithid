@@ -22,11 +22,11 @@
 
 -record(image, {
           id      = none,
-          name    = none,
           tag     = none,
           layers  = none,
-          command = none
+          command = none,
+          created = none
          }).
 
 -define(BASE_LAYER, #layer {id = base, location = ?BASEJAIL_IMAGE_LOCATION }).
--define(BASE_IMAGE, #image {name = "base", layers = [?BASE_LAYER]}).
+-define(BASE_IMAGE, #image {id = base, tag = "base", layers = [?BASE_LAYER]}).

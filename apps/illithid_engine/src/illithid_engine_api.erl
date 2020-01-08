@@ -55,10 +55,6 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info("clear all", State) ->
-    illithid_engine_zfs:clear_zroot(),
-    {noreply, State};
-
 handle_info({tcp, Socket, Cmd}, State) ->
     handle_command(erlang:binary_to_term(Cmd), Socket),
     {noreply, State};
@@ -96,6 +92,9 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
+handle_command(list_images, Socket) ->
+    Images = illithid_engine_image:list_images(),
+    send_reply(Images, Socket);
 
 handle_command(clear_zroot, Socket) ->
     ok = illithid_engine_zfs:clear_zroot(),

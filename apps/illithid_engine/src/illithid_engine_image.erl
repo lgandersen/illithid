@@ -26,7 +26,9 @@
 -include_lib("include/illithid.hrl").
 
 %% API
--export([create_image/1, create_image/2]).
+-export([create_image/1, create_image/2,
+        list_images/0,
+        add_image/1]).
 
 -record(build_state, {
           instructions = none,
@@ -41,13 +43,21 @@
          image_table = image_table
          }).
 
+add_image(Image) ->
+    gen_server:cast(?SERVER, {add, Image}).
+
+
+list_images() ->
+    gen_server:call(?SERVER, list).
+
+
 create_image(Instructions) ->
     create_image(Instructions, "./").
 
 create_image(Instructions, ContextPath) ->
-    ImageRecord = #image { name = none, tag = none, layers = [], command = none },
+    ImageRecord = #image { tag = none, layers = [], command = none },
     BuildState = #build_state { instructions = Instructions, context = ContextPath, image_record = ImageRecord },
-    gen_server:call(?SERVER, {build_image, BuildState}).
+    gen_server:call(?SERVER, {create, BuildState}).
 
 
 %%%===================================================================
@@ -62,13 +72,23 @@ start_link() ->
 
 init([]) ->
     ets:new(image_table, [protected, named_table, {keypos, 2}]),
-    ets:insert(image_table, [?BASE_IMAGE]),
+    ets:insert(image_table, ?BASE_IMAGE),
     {ok, #state{}}.
 
 
-handle_call({build_image, BuildState}, _From, State) ->
+handle_call(list, _From, State) ->
+    ImagesAll = ets:match_object(image_table, '$1'),
+    Images = lists:filter(fun(Image) ->
+                                  case Image#image.id of
+                                      base -> false;
+                                      _ -> true
+                                  end
+                          end, ImagesAll),
+    {reply, Images, State};
+
+handle_call({create, BuildState}, _From, State) ->
     {ok, Image} = Reply = proces_instructions(BuildState),
-    ets:insert(image_table, [Image]),
+    ets:insert(image_table, Image),
     {reply, Reply, State};
 
 
@@ -76,6 +96,10 @@ handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
+
+handle_cast({add, Image}, State) ->
+    ets:insert(image_table, Image),
+    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -128,4 +152,4 @@ proces_instructions(#build_state {
     proces_instructions(NewState);
 
 proces_instructions(#build_state { instructions = [], image_record = #image { layers = [#layer { id = ImageId } | _Rest] } = Image }) ->
-    {ok, Image#image {id = ImageId }}.
+    {ok, Image#image {id = ImageId, created = erlang:timestamp() }}.

@@ -24,7 +24,8 @@
 %% test cases
 -export([
          t_clear_all/1,
-         t_build_simple_image/1
+         t_build_simple_image/1,
+         t_list_image/1
         ]).
 
 -include_lib("include/illithid.hrl").
@@ -35,7 +36,8 @@ all() ->
     [
      %% TODO: Group names here e.g. {group, crud}
      t_clear_all,
-     t_build_simple_image
+     t_build_simple_image,
+     t_list_image
     ].
 
 suite() ->
@@ -96,17 +98,42 @@ end_per_testcase(_TestCase, _Config) ->
 %%%===================================================================
 t_clear_all(_Config) ->
     0 = illithid_engine_zfs:create(?ZROOT("test_cli_clear_all")),
-    Msg = os:cmd("../../../default/bin/illithid clear all"),
-    lager:info("Output from running illithid-cli: ~p", [Msg]),
+    run_cli_command("illithid clear all"),
     0 = illithid_engine_zfs:create(?ZROOT("test_cli_clear_all")),
     ok.
 
 
 t_build_simple_image(Config) ->
     Path = ?config(data_dir, Config),
-    Msg = os:cmd("../../../default/bin/illithid build " ++ Path),
-    lager:info("Output from running illithid-cli: ~p", [Msg]),
+    Msg = run_cli_command("illithid build " ++ Path),
     [_, Id] = string:split(Msg, "Image id: "),
     timer:sleep(1000),
     {ok, <<"lol\n">>} = file:read_file("/" ++ ?ZROOT ++ "/" ++ lists:droplast(Id) ++ "/root/test.txt"),
     ok.
+
+
+t_list_image(_Config) ->
+    Created = {1578,330264,608742},
+    Id = "lolololololooooooooooooooool",
+    Tag = "test:latest",
+    Image = #image { id = Id, tag = Tag, created = Created },
+    illithid_engine_image:add_image(Image),
+    ImageList = run_cli_command("illithid images"),
+    [_, OutPut] = string:split(ImageList, "\n"),
+    ExpectedOutput =
+        "n/a           test:latest       lolololololo     2020-01-06 17:04:24   n/a MB\n",
+    OutPut = ExpectedOutput,
+    ok.
+
+
+print_many_lines(Text) ->
+    Lines = string:split(Text, "\n"),
+    lists:map(fun(Line) -> lager:info(Line) end, Lines),
+    ok.
+
+
+run_cli_command(Cmd) ->
+    Output = os:cmd("../../../default/bin/" ++ Cmd),
+    lager:info("Output from running illithid-cli:"),
+    ok = print_many_lines(Output),
+    Output.

@@ -4,6 +4,13 @@
 
 -include_lib("include/illithid.hrl").
 
+
+main(["images"]) ->
+    Images = send_to_backend(list_images),
+    io:format("REPOSITORY    TAG               IMAGE ID         CREATED               SIZE\n"),
+    print_images(Images),
+    ok;
+
 main(["clear", "all"]) ->
     ok = send_to_backend(clear_zroot),
     io:format("ZRoot cleared!~n"),
@@ -17,6 +24,30 @@ main(["build", Path]) ->
 
 main(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
+
+
+print_images([#image { id = Id, tag = Tag, created = Created } | Rest]) ->
+    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_datetime(Created),
+    %% "~.4.0w-~.2.0w-~.2.0wT~.2.0w:~.2.0w:~.2.0w.0+00:00" => "2019-09-19T15:07:03.0+00:00"
+    Datetime = io_lib:format("~.4.0w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
+                             [Year, Month, Day, Hour, Min, Sec]),
+    io:format("n/a           ~s       ~s     ~s   n/a MB~n",
+              [cell(Tag, 11), cell(Id, 12), cell(Datetime, 11)]),
+
+    print_images(Rest);
+
+print_images([]) ->
+    ok.
+
+
+cell(Content, Size) ->
+    case length(Content) =< Size of
+        true ->
+            Content ++ string:copies(" ", Size - length(Content));
+
+        false ->
+            string:sub_string(Content, 1, Size)
+    end.
 
 
 send_to_backend(Msg) ->
