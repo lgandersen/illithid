@@ -78,12 +78,16 @@ init([]) ->
 
 handle_call(list, _From, State) ->
     ImagesAll = ets:match_object(image_table, '$1'),
-    Images = lists:filter(fun(Image) ->
+    ImagesUnordered = lists:filter(fun(Image) ->
                                   case Image#image.id of
                                       base -> false;
                                       _ -> true
                                   end
                           end, ImagesAll),
+    Images = lists:sort(
+               fun(#image { created = A }, #image { created = B }) ->
+                       A =< B
+               end, ImagesUnordered),
     {reply, Images, State};
 
 handle_call({create, BuildState}, _From, State) ->
