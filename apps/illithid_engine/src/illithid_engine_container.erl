@@ -2,16 +2,17 @@
 %%% @author lga
 %%% @copyright (C) 2019, lga
 %%% @doc
-%%% This gen_server manages jails: Creates, destroys and monitor jails.
+%%% This gen_server manages jails: Creates, runs, destroys and monitors jails.
 %%% @end
 %%%-------------------------------------------------------------------
--module(illithid_engine_jail).
+-module(illithid_engine_container).
 
 -behaviour(gen_server).
 
 %% API
--export([start_jail/1,
-        start_and_finish_jail/1,
+-export([create/1,
+        run/1,
+        run_sync/1,
         destroy/1,
         umount_devfs/1]).
 
@@ -29,7 +30,7 @@
 
 -record(state, {
           caller = none,
-          jail_config = none,
+          jail = none,
           closing_port = none,
           starting_port = none
          }).
@@ -37,31 +38,31 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_jail([Jail]) ->
+create(Jail) ->
     gen_server:start_link(?MODULE, [Jail], []).
 
-start_and_finish_jail([Jail]) ->
-    gen_server:start_link(?MODULE, [Jail, self()], []),
+
+run(Pid) ->
+    gen_server:cast(Pid, run).
+
+
+run_sync(Pid) ->
+    gen_server:cast(Pid, {run_sync, self()}),
     receive
         {ok, {exit_status, N}} ->
-            umount_devfs(Jail#jail.path),
             {ok, {exit_status, N}}
     end.
 
-destroy(Jail) ->
-    gen_server:cast(?SERVER, {destroy, Jail}).
+
+destroy(Pid) ->
+    gen_server:cast(Pid, destroy).
 
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([Jail, CallerPid]) ->
-    Port = create(Jail),
-    {ok, #state{ jail_config = Jail, starting_port = Port, caller = CallerPid }};
-
 init([Jail]) ->
-    Port = create(Jail),
-    {ok, #state{ jail_config = Jail, starting_port = Port }}.
+    {ok, #state { jail = Jail }}.
 
 
 handle_call(_Request, _From, State) ->
@@ -69,21 +70,31 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({destroy, Jail}, State) ->
-    Port= destroy_(Jail),
-    {noreply, State#state {closing_port = Port }};
+handle_cast({run_sync, Pid}, #state { jail = Jail } = State) ->
+    Port = run_(Jail),
+    {noreply, State#state { starting_port = Port, caller = Pid }};
+
+handle_cast(run, #state { jail = Jail } = State) ->
+    Port = run_(Jail),
+    {noreply, State#state { starting_port = Port }};
+
+handle_cast(destroy, #state { jail = Jail } = State) ->
+    Port = destroy_(Jail),
+    {noreply, State#state { closing_port = Port }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({Port, {exit_status, N}}, #state { closing_port = Port, jail_config = Jail } = State) ->
+
+handle_info({Port, {exit_status, N}}, #state { closing_port = Port, jail = Jail } = State) ->
     lager:info("~p: Jail shut down with exit-code: ~p", [Port, N]),
     umount_devfs(Jail#jail.path),
     %%TODO shouldn't we just exit (normally) here?
     {noreply, State#state { closing_port = none }};
 
-handle_info({Port, {exit_status, N}}, #state { caller = Caller, starting_port = Port } = State) ->
+handle_info({Port, {exit_status, N}}, #state { starting_port = Port, caller = Caller, jail = Jail } = State) ->
     lager:info("Jail starting port ~p exited with status ~p", [Port, N]),
+    umount_devfs(Jail#jail.path),
     NewState = case Caller of
         none ->
             State;
@@ -114,11 +125,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-create(Jail) ->
-    create_(Jail).
-
-
-create_(#jail{path=Path, command=Cmd, command_args=CmdArgs, parameters=Parameters}) ->
+run_(#jail { path = Path, command = Cmd, command_args = CmdArgs, parameters = Parameters }) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",

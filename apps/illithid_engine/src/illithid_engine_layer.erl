@@ -59,7 +59,8 @@ handle_call({create_layer, {Context, Instruction, ParentLayerId}}, _From, #state
                           command      = Cmd,
                           command_args = CmdArgs
                          },
-            {ok, {exit_status, 0}} = illithid_engine_jail:start_and_finish_jail([Jail]);
+            {ok, Pid} = illithid_engine_container:create(Jail),
+            {ok, {exit_status, 0}} = illithid_engine_container:run_sync(Pid);
 
 
         {copy, SrcAndDest} ->

@@ -31,12 +31,12 @@ all() -> [
 
 init_per_suite(Config) ->
     lager:start(),
-    os:cmd("../../../default/bin/illithid clear all"),
+    ok = illithid_engine_zfs:clear_zroot(),
     Config.
 
 
 end_per_suite(_Config) ->
-    os:cmd("../../../default/bin/illithid clear all"),
+    ok = illithid_engine_zfs:clear_zroot(),
     ok.
 
 
@@ -46,8 +46,8 @@ init_per_testcase(TestCase, Config) ->
     0 = illithid_engine_zfs:clone(?BASEJAIL_IMAGE_LOCATION, Dataset),
 
     Jail = #jail{
-              path= "/" ++ Dataset, %% Atm illithid_engine_jail is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
-              parameters=["mount.devfs", "ip4.addr=10.13.37.3", "exec.stop=\"/bin/sh /etc/rc.shutdown\""] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
+              path       = "/" ++ Dataset, %% Atm illithid_engine_container is relying on the fact the clone created for a jail is automatically mount into this path. Should be more generic.
+              parameters = ["mount.devfs", "ip4.addr=10.13.37.3", "exec.stop=\"/bin/sh /etc/rc.shutdown\""] % "mount.devfs", <-- using mount.devfs requires additional unmounting or that zfs destroy -f is used
              },
     [{jail, Jail}, {dataset, Dataset} | Config].
 
@@ -61,27 +61,27 @@ end_per_testcase(_TestCase, Config) ->
 
 
 create_jail(Config) ->
-    Jail = ?config(jail, Config),
-    {ok, _Pid} = illithid_engine_jail:start_jail([Jail#jail { command = "/bin/ls", command_args=["/"] }]),
-    timer:sleep(1000), % start_jail is async so we'll have to wait for the gen_server to finish.
-    illithid_engine_jail:umount_devfs(Jail#jail.path),
+    JailCfg = ?config(jail, Config),
+    {ok, Pid} = illithid_engine_container:create(JailCfg#jail { command = "/bin/ls", command_args = ["/"] }),
+    illithid_engine_container:run(Pid), % Since this is async we need to wait for the jail to shutdown properly
+    timer:sleep(1000),
     ok.
 
 
 create_jail_and_wait_on_finish(Config) ->
-    Jail = ?config(jail, Config),
-    {ok, {exit_status, _N}} = illithid_engine_jail:start_and_finish_jail([Jail#jail { command = "/bin/ls", command_args=["/"] }]),
-    illithid_engine_jail:umount_devfs(Jail#jail.path),
+    JailCfg = ?config(jail, Config),
+    {ok, Pid} = illithid_engine_container:create(JailCfg#jail { command = "/bin/ls", command_args = ["/"] }),
+    {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid),
     ok.
 
 
 destroy_jail(Config) ->
+    %%FIXME! All of the wait-for-jail-to-stop logic here should be in illithid_engine_container
     Jail = ?config(jail, Config),
-    {ok, _Pid} = illithid_engine_jail:start_jail([Jail#jail { command = "/bin/sh", command_args=["etc/rc"] }]),
+    {ok, _Pid} = illithid_engine_container:start_jail([Jail#jail { command = "/bin/sh", command_args=["etc/rc"] }]),
     timer:sleep(1000),
-    illithid_engine_jail:destroy(Jail),
+    illithid_engine_container:destroy(Jail),
     timer:sleep(15000), % It takes some time to close down a fullblown and recently created jail!
-    illithid_engine_jail:umount_devfs(Jail#jail.path),
     ok.
 
 
