@@ -13,7 +13,7 @@
 -export([create/1,
         run/1,
         run_sync/1,
-        destroy/1,
+        stop_sync/1,
         umount_devfs/1]).
 
 %% gen_server callbacks
@@ -53,9 +53,12 @@ run_sync(Pid) ->
             {ok, {exit_status, N}}
     end.
 
-
-destroy(Pid) ->
-    gen_server:cast(Pid, destroy).
+stop_sync(Pid) ->
+    gen_server:cast(Pid, {stop_sync, self()}),
+    receive
+        {ok, {exit_status, N}} ->
+            {ok, {exit_status, N}}
+    end.
 
 
 %%%===================================================================
@@ -78,19 +81,27 @@ handle_cast(run, #state { jail = Jail } = State) ->
     Port = run_(Jail),
     {noreply, State#state { starting_port = Port }};
 
-handle_cast(destroy, #state { jail = Jail } = State) ->
+handle_cast({stop_sync, Pid}, #state { jail = Jail } = State) ->
     Port = destroy_(Jail),
-    {noreply, State#state { closing_port = Port }};
+    {noreply, State#state { closing_port = Port, caller = Pid }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({Port, {exit_status, N}}, #state { closing_port = Port, jail = Jail } = State) ->
+handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  jail = Jail } = State) ->
     lager:info("~p: Jail shut down with exit-code: ~p", [Port, N]),
     umount_devfs(Jail#jail.path),
+    NewState = case Caller of
+        none ->
+            State;
+
+        _Pid ->
+            Caller ! {ok, {exit_status, N}},
+            State#state { caller = none }
+    end,
     %%TODO shouldn't we just exit (normally) here?
-    {noreply, State#state { closing_port = none }};
+    {noreply, NewState#state { closing_port = none }};
 
 handle_info({Port, {exit_status, N}}, #state { starting_port = Port, caller = Caller, jail = Jail } = State) ->
     lager:info("Jail starting port ~p exited with status ~p", [Port, N]),

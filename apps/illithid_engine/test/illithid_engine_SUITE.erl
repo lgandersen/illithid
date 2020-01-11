@@ -10,9 +10,9 @@
          end_per_suite/1]).
 
 -export([
-         create_jail/1,
-         create_jail_and_wait_on_finish/1,
-         destroy_jail/1,
+         create_container_async/1,
+         create_container_sync/1,
+         stop_sync/1,
          create_layer_with_run_instruction/1,
          create_layer_with_copy_instruction/1,
          test_image_builder/1
@@ -20,9 +20,9 @@
 
 
 all() -> [
-          create_jail,
-          create_jail_and_wait_on_finish,
-          %%destroy_jail,
+          create_container_async,
+          create_container_sync,
+          stop_sync,
           create_layer_with_run_instruction,
           create_layer_with_copy_instruction,
           test_image_builder
@@ -60,7 +60,7 @@ end_per_testcase(_TestCase, Config) ->
     0 = illithid_engine_zfs:destroy(Dataset).
 
 
-create_jail(Config) ->
+create_container_async(Config) ->
     JailCfg = ?config(jail, Config),
     {ok, Pid} = illithid_engine_container:create(JailCfg#jail { command = "/bin/ls", command_args = ["/"] }),
     illithid_engine_container:run(Pid), % Since this is async we need to wait for the jail to shutdown properly
@@ -68,20 +68,17 @@ create_jail(Config) ->
     ok.
 
 
-create_jail_and_wait_on_finish(Config) ->
+create_container_sync(Config) ->
     JailCfg = ?config(jail, Config),
     {ok, Pid} = illithid_engine_container:create(JailCfg#jail { command = "/bin/ls", command_args = ["/"] }),
     {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid),
     ok.
 
 
-destroy_jail(Config) ->
-    %%FIXME! All of the wait-for-jail-to-stop logic here should be in illithid_engine_container
-    Jail = ?config(jail, Config),
-    {ok, _Pid} = illithid_engine_container:start_jail([Jail#jail { command = "/bin/sh", command_args=["etc/rc"] }]),
-    timer:sleep(1000),
-    illithid_engine_container:destroy(Jail),
-    timer:sleep(15000), % It takes some time to close down a fullblown and recently created jail!
+stop_sync(Config) ->
+    JailCfg = ?config(jail, Config),
+    {ok, Pid} = illithid_engine_container:create(JailCfg#jail { command = "/bin/ls", command_args = ["etc/rc"] }),
+    {ok, {exit_status, _N}} = illithid_engine_container:stop_sync(Pid),
     ok.
 
 
