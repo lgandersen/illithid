@@ -113,16 +113,25 @@ t_build_simple_image(Config) ->
 
 
 t_list_image(_Config) ->
-    Created = {1578,330264,608742},
-    Id = "lolololololooooooooooooooool",
-    Tag = "test:latest",
-    Image = #image { id = Id, tag = Tag, created = Created },
-    illithid_engine_image:add_image(Image),
+    Image1 = #image {
+               id      = "lolololololooooooooooooooool",
+               tag     = "test:latest",
+               created = {1578,330264,608742}
+              },
+    Image2 = #image {
+               id      = "leleleleleleeeeee",
+               tag     = "test:oldest",
+               created = {1578,330200,0}
+              },
+    illithid_engine_image:add_image(Image1),
+    illithid_engine_image:add_image(Image2),
     ImageList = run_cli_command("illithid images"),
-    [_, OutPut] = string:split(ImageList, "\n"),
-    ExpectedOutput =
-        "n/a           test:latest       lolololololo     2020-01-06 17:04:24   n/a MB\n",
-    OutPut = ExpectedOutput,
+    [_ | Output ] = string:tokens(ImageList, "\n"),
+    ExpectedOutput = [
+        "n/a           test:latest       lolololololo     2020-01-06 17:04:24   n/a MB",
+        "n/a           test:oldest       lelelelelele     2020-01-06 17:03:20   n/a MB"
+                     ],
+    Output = ExpectedOutput,
     ok.
 
 

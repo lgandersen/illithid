@@ -17,11 +17,11 @@ parse(FileRaw) when is_binary(FileRaw) ->
 
 
 parse_({run, <<"[", _Rest/binary>> = JSONForm}) ->
-    [Cmd | CmdArgs] = decode_jsonform(JSONForm),
-    {run, Cmd, CmdArgs};
+    Cmd = decode_jsonform(JSONForm),
+    {run, Cmd};
 
 parse_({run, CmdAsShell}) ->
-    {run, "/bin/sh", ["-c", binary:bin_to_list(CmdAsShell)]};
+    {run, ["/bin/sh", "-c", binary:bin_to_list(CmdAsShell)]};
 
 parse_({cmd, <<"[", _Rest/binary>> = JSONForm}) ->
     {cmd, decode_jsonform(JSONForm)};
@@ -138,8 +138,8 @@ test_from_instruction(_) ->
 test_run_instruction_(_) ->
     FileRaw1 = <<"# Testing\nFROM lol\nRUN cat lol.txt">>,
     FileRaw2 = <<"# Testing\nFROM lol\nRUN [\"/bin/sh\", \"-c\", \"cat lol.txt\"]">>,
-    [?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw1)),
-     ?_assertEqual([{from, "lol"}, {run, "/bin/sh", ["-c", "cat lol.txt"]}], parse(FileRaw2))].
+    [?_assertEqual([{from, "lol"}, {run, ["/bin/sh", "-c", "cat lol.txt"]}], parse(FileRaw1)),
+     ?_assertEqual([{from, "lol"}, {run, ["/bin/sh", "-c", "cat lol.txt"]}], parse(FileRaw2))].
 
 
 test_cmd_instruction_(_) ->

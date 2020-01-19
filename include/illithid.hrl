@@ -1,24 +1,29 @@
 -define(ZROOT, "zroot/mindflayer_dev").
 -define(ZROOT(Name), ?ZROOT ++ "/" ++ Name).
--define(BASEJAIL_IMAGE_LOCATION, "zroot/mindflayer_basejail@image"). %default image-snap to use when cloning: '@image'
+-define(BASE_LAYER_LOCATION, "zroot/mindflayer_basejail@image"). % Default image-snap to use when cloning: '@image'
+-define(BASE_LAYER_PATH, "/zroot/mindflayer_basejail").
 
 -define(API_SOCKET, "/var/run/illithid.sock").
 
--record(jail, {
+-record(layer, {
+         %%% When 'id' i set to 'base' it refers to dataset ?BASE_LAYER (is referenced in Dockerfiles with "FROM scratch")
+         id        = none,
+         parent_id = none,
+         dataset   = none,
+         location  = none, % zfs snapshot of the particular layer
+         path      = none
+         }).
+
+
+-record(container, {
+          id           = none,
           jid          = none,
-          pid          = none,
-          path         = none,
+          pid          = none, % Erlang proces id of the gen_server
           command      = none,
-          command_args = none,
+          layer        = none,
           parameters   = []
           }).
 
-
--record(layer, {
-         id        = none, % when id i set to 'base' it refers to dataset ?BASEJAIL_IMAGE (is referenced in Dockerfiles with "FROM scratch")
-         parent_id = none,
-         location  = none % zfs snapshot of the particular layer
-         }).
 
 -record(image, {
           id      = none,
@@ -28,5 +33,5 @@
           created = none
          }).
 
--define(BASE_LAYER, #layer {id = base, location = ?BASEJAIL_IMAGE_LOCATION }).
+-define(BASE_LAYER, #layer {id = base, location = ?BASE_LAYER_LOCATION, path = ?BASE_LAYER_PATH }).
 -define(BASE_IMAGE, #image {id = base, tag = "base", layers = [?BASE_LAYER]}).

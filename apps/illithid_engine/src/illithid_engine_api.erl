@@ -92,6 +92,13 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
+handle_command({run, ImageIdOrTag}, Socket) ->
+    %%FIXME: Draft of this function clause. Not testeted throughout the stack
+    Image = illithid_engine_image:get_image(ImageIdOrTag),
+    {ok, Pid } = illithid_engine_container:create(Image),
+    ok = illithid_engine_container:run(Pid),
+    send_reply(ok, Socket);
+
 handle_command(list_images, Socket) ->
     Images = illithid_engine_image:list_images(),
     send_reply(Images, Socket);

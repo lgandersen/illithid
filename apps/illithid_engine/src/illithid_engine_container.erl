@@ -10,11 +10,12 @@
 -behaviour(gen_server).
 
 %% API
--export([create/1,
-        run/1,
-        run_sync/1,
-        stop_sync/1,
-        umount_devfs/1]).
+-export([start_link/0,
+         create/3,
+         run/1,
+         run_sync/1,
+         stop_sync/1,
+         umount_devfs/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -30,7 +31,8 @@
 
 -record(state, {
           caller = none,
-          jail = none,
+          image = none,
+          container = none,
           closing_port = none,
           starting_port = none
          }).
@@ -38,8 +40,12 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-create(Jail) ->
-    gen_server:start_link(?MODULE, [Jail], []).
+start_link() ->
+    gen_server:start_link(?MODULE, [], []).
+
+
+create(Pid, Image, Opts) ->
+    gen_server:call(Pid, {create, Image, Opts}).
 
 
 run(Pid) ->
@@ -64,34 +70,46 @@ stop_sync(Pid) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([Jail]) ->
-    {ok, #state { jail = Jail }}.
+init([]) ->
+    {ok, #state { }}.
 
+
+handle_call({create, #image { command = Cmd } = Image, Opts}, _From, State) ->
+    {ok, Layer} = illithid_engine_layer:new(Image),
+    Container = #container {
+                   id         = illithid_engine_util:uuid(),
+                   pid        = self(),
+                   command    = Cmd,
+                   layer      = Layer,
+                   parameters = Opts
+                  },
+    {reply, Container, State#state { container = Container }};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
 
-handle_cast({run_sync, Pid}, #state { jail = Jail } = State) ->
-    Port = run_(Jail),
+handle_cast({run_sync, Pid}, #state { container = Container } = State) ->
+    Port = run_(Container),
     {noreply, State#state { starting_port = Port, caller = Pid }};
 
-handle_cast(run, #state { jail = Jail } = State) ->
-    Port = run_(Jail),
+handle_cast(run, #state { container = Container } = State) ->
+    Port = run_(Container),
     {noreply, State#state { starting_port = Port }};
 
-handle_cast({stop_sync, Pid}, #state { jail = Jail } = State) ->
-    Port = destroy_(Jail),
+handle_cast({stop_sync, Pid}, State) ->
+    Port = destroy_(),
     {noreply, State#state { closing_port = Port, caller = Pid }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  jail = Jail } = State) ->
-    lager:info("~p: Jail shut down with exit-code: ~p", [Port, N]),
-    umount_devfs(Jail#jail.path),
+handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
+    lager:info("~p: Container shut down with exit-code: ~p", [Port, N]),
+    #container { layer = #layer {path = Path}} = Container,
+    umount_devfs(Path),
     NewState = case Caller of
         none ->
             State;
@@ -103,9 +121,10 @@ handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Cal
     %%TODO shouldn't we just exit (normally) here?
     {noreply, NewState#state { closing_port = none }};
 
-handle_info({Port, {exit_status, N}}, #state { starting_port = Port, caller = Caller, jail = Jail } = State) ->
-    lager:info("Jail starting port ~p exited with status ~p", [Port, N]),
-    umount_devfs(Jail#jail.path),
+handle_info({Port, {exit_status, N}}, #state { starting_port = Port, caller = Caller, container = Container } = State) ->
+    lager:info("Container starting port ~p exited with status ~p", [Port, N]),
+    #container { layer = #layer { path = Path } } = Container,
+    umount_devfs(Path),
     NewState = case Caller of
         none ->
             State;
@@ -136,7 +155,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-run_(#jail { path = Path, command = Cmd, command_args = CmdArgs, parameters = Parameters }) ->
+run_(#container {
+        layer      = #layer { path = Path },
+        command    = [Cmd | CmdArgs],
+        parameters = Parameters }) ->
 % $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",
@@ -156,16 +178,16 @@ run_(#jail { path = Path, command = Cmd, command_args = CmdArgs, parameters = Pa
     Port.
 
 
-destroy_(_Jail) ->
+destroy_() ->
     Executable = "/usr/sbin/jail",
     Name = jail_name_from_pid(),
-    Args = ["-c", Name],
+    Args = ["-r", Name],
     Port = open_port({spawn_executable, Executable},
                      [exit_status,
                       {line, 1024},
                       {args, Args}
                       ]),
-    lager:info("~p: Shutting down jail: ~p", [Port, Args]),
+    lager:info("~p: Shutting down jail: ~p", [Port, [Executable | Args]]),
     Port.
 
 
@@ -180,8 +202,8 @@ jail_name_from_pid() ->
         <<".">>, <<"_">>, [global])).
 
 
-umount_devfs(JailPath) ->
-    Args = [JailPath ++ "/dev"],
+umount_devfs(Path) ->
+    Args = [Path ++ "/dev"],
     Port = open_port({spawn_executable, "/sbin/umount"}, [exit_status, {line, 1024}, {args, Args}]),
     lager:info("~p: Executing umount-command: ~p", [Port, Args]),
     receive

@@ -22,18 +22,28 @@ main(["build", Path]) ->
     io:format("Image id: ~s~n", [Image#image.id]),
     ok;
 
+main(["run", Image]) ->
+    %% Image can be a ImageId or a tag
+    {ok, Image} = send_to_backend({run, Image}),
+    io:format("Image id: ~s~n", [Image#image.id]),
+    ok;
+
+
 main(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
 
 
 print_images([#image { id = Id, tag = Tag, created = Created } | Rest]) ->
     {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_datetime(Created),
-    %% "~.4.0w-~.2.0w-~.2.0wT~.2.0w:~.2.0w:~.2.0w.0+00:00" => "2019-09-19T15:07:03.0+00:00"
-    Datetime = io_lib:format("~.4.0w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
-                             [Year, Month, Day, Hour, Min, Sec]),
-    io:format("n/a           ~s       ~s     ~s   n/a MB~n",
-              [cell(Tag, 11), cell(Id, 12), cell(Datetime, 11)]),
 
+    %% "~.4.0w-~.2.0w-~.2.0wT~.2.0w:~.2.0w:~.2.0w.0+00:00" => "2019-09-19T15:07:03.0+00:00"
+    Datetime = io_lib:format(
+                 "~.4.0w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
+                 [Year, Month, Day, Hour, Min, Sec]),
+
+    io:format(
+      "n/a           ~s       ~s     ~s   n/a MB~n",
+      [cell(Tag, 11), cell(Id, 12), cell(Datetime, 11)]),
     print_images(Rest);
 
 print_images([]) ->

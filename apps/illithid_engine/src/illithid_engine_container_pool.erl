@@ -3,7 +3,8 @@
 
 %% API.
 -export([start_link/0,
-         start_jail/1
+         new/0,
+         stop/1
         ]).
 
 %% Supervisor callbacks.
@@ -21,13 +22,16 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
+stop(Pid) ->
+    supervisor:terminate_child({local, ?MODULE}, Pid).
 
--spec start_jail(tuple()) -> {ok, Pid} | {error, Reason}
+
+-spec new() -> {ok, Pid} | {error, Reason}
     when
         Pid    :: pid(),
         Reason :: term().
-start_jail(Jail) ->
-    supervisor:start_child(?SERVER, [Jail]).
+new() ->
+    supervisor:start_child(?SERVER, []).
 
 
 %% @private
@@ -40,7 +44,7 @@ init([]) ->
      },
     ChildSpec = #{
       id => illithid_engine_container,
-      start => {illithid_engine_container, create, []},
+      start => {illithid_engine_container, start_link, []},
       restart => temporary,
       shutdown => 5000,
       type => worker,
