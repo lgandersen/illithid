@@ -95,7 +95,7 @@ listen(APIProces, LSocket) ->
 handle_command({run, ImageIdOrTag}, Socket) ->
     %%FIXME: Draft of this function clause. Not testeted throughout the stack
     Image = illithid_engine_image:get_image(ImageIdOrTag),
-    {ok, Pid } = illithid_engine_container:create(Image),
+    {ok, Pid} = illithid_engine_container:create(Image),
     ok = illithid_engine_container:run(Pid),
     send_reply(ok, Socket);
 

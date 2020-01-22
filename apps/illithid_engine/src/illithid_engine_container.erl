@@ -13,6 +13,7 @@
 -export([start_link/0,
          create/3,
          run/1,
+         run/2,
          run_sync/1,
          stop_sync/1,
          umount_devfs/1]).
@@ -31,6 +32,7 @@
 
 -record(state, {
           caller = none,
+          relay_to = none,
           image = none,
           container = none,
           closing_port = none,
@@ -48,16 +50,18 @@ create(Pid, Image, Opts) ->
     gen_server:call(Pid, {create, Image, Opts}).
 
 
+run(Pid, Opts) ->
+    gen_server:cast(Pid, {run, Opts}).
+
+
 run(Pid) ->
     gen_server:cast(Pid, run).
 
 
 run_sync(Pid) ->
-    gen_server:cast(Pid, {run_sync, self()}),
-    receive
-        {ok, {exit_status, N}} ->
-            {ok, {exit_status, N}}
-    end.
+    gen_server:cast(Pid, {run, [{relay_to, self()}]}),
+    receive_exit_status(Pid).
+
 
 stop_sync(Pid) ->
     gen_server:cast(Pid, {stop_sync, self()}),
@@ -90,9 +94,10 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({run_sync, Pid}, #state { container = Container } = State) ->
+handle_cast({run, Opts}, #state { container = Container } = State) ->
+    RelayTo = proplists:get_value(relay_to, Opts, none),
     Port = run_(Container),
-    {noreply, State#state { starting_port = Port, caller = Pid }};
+    {noreply, State#state { starting_port = Port, relay_to = RelayTo }};
 
 handle_cast(run, #state { container = Container } = State) ->
     Port = run_(Container),
@@ -104,7 +109,6 @@ handle_cast({stop_sync, Pid}, State) ->
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
-
 
 handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
     lager:info("~p: Container shut down with exit-code: ~p", [Port, N]),
@@ -121,22 +125,15 @@ handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Cal
     %%TODO shouldn't we just exit (normally) here?
     {noreply, NewState#state { closing_port = none }};
 
-handle_info({Port, {exit_status, N}}, #state { starting_port = Port, caller = Caller, container = Container } = State) ->
-    lager:info("Container starting port ~p exited with status ~p", [Port, N]),
-    #container { layer = #layer { path = Path } } = Container,
-    umount_devfs(Path),
-    NewState = case Caller of
+handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo }) ->
+    lager:info("Message received from ~p: ~p", [Port, Msg]),
+    case RelayTo of
         none ->
-            State;
+            ok;
 
-        _Pid ->
-            Caller ! {ok, {exit_status, N}},
-            State#state { caller = none }
+        Pid when is_pid(Pid) ->
+            RelayTo ! {self(), Msg}
     end,
-    {noreply, NewState};
-
-handle_info({Port, {data, {eol, Line}}}, State) ->
-    lager:info("~p: Last line: ~p", [Port, Line]),
     {noreply, State};
 
 handle_info(Info, State) ->
@@ -155,6 +152,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+receive_exit_status(Pid) ->
+    receive
+        {Pid, {exit_status, N}} ->
+            {ok, {exit_status, N}};
+
+        {Pid, _Msg} ->
+            receive_exit_status(Pid)
+    end.
+
+
 run_(#container {
         layer      = #layer { path = Path },
         command    = [Cmd | CmdArgs],

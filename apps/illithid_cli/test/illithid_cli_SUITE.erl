@@ -30,6 +30,7 @@
 
 -include_lib("include/illithid.hrl").
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 
 all() ->
@@ -131,7 +132,7 @@ t_list_image(_Config) ->
         "n/a           test:latest       lolololololo     2020-01-06 17:04:24   n/a MB",
         "n/a           test:oldest       lelelelelele     2020-01-06 17:03:20   n/a MB"
                      ],
-    Output = ExpectedOutput,
+    ?assertEqual(ExpectedOutput, Output),
     ok.
 
 

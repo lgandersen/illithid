@@ -4,7 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 container_start() ->
-    %lager:start(),
+    lager:start(),
     Image = ?BASE_IMAGE#image { created = erlang:timestamp() },
     Opts = ["mount.devfs",
             "ip4.addr=10.13.37.3",
