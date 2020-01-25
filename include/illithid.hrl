@@ -17,6 +17,7 @@
 
 -record(container, {
           id           = none,
+          name         = none,
           jid          = none,
           pid          = none, % Erlang proces id of the gen_server
           command      = none,
@@ -27,6 +28,7 @@
 
 -record(image, {
           id      = none,
+          name    = none,
           tag     = none,
           layers  = none,
           command = none,

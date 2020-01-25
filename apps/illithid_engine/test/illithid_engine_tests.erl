@@ -12,12 +12,10 @@ container_start() ->
             ],
     ok = illithid_engine_zfs:clear_zroot(),
     {ok, LayerPid} = illithid_engine_layer:start_link(),
-    {ok, ContainerPid} = illithid_engine_container:start_link(),
-    [Image, Opts, ContainerPid, LayerPid].
+    [Image, Opts, LayerPid].
 
 
-container_stop([_, _, ContainerPid, LayerPid]) ->
-    gen_server:stop(ContainerPid),
+container_stop([_, _, LayerPid]) ->
     gen_server:stop(LayerPid),
     ok.
 
@@ -53,18 +51,18 @@ image_building_test_() ->
      }.
 
 
-create_container_async([Image, Opts, Pid, _]) ->
-    illithid_engine_container:create(Pid, Image#image { command = ["/bin/ls", "/"] }, Opts),
+create_container_async([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
     ?_assertEqual(ok, illithid_engine_container:run(Pid)).
 
 
-create_container_sync([Image, Opts, Pid, _]) ->
-    illithid_engine_container:create(Pid, Image#image { command = ["/bin/ls", "/"] }, Opts),
+create_container_sync([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
     ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)).
 
 
-container_shutdown_sync([Image, Opts, Pid, _]) ->
-    illithid_engine_container:create(Pid, Image#image { command = ["/bin/sh", "/etc/rc"] }, Opts),
+container_shutdown_sync([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/sh", "/etc/rc"] }, Opts),
     [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)),
     {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_sync(Pid))}].
 

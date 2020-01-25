@@ -10,8 +10,8 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0,
-         create/3,
+-export([start_link/2,
+         fetch/1,
          run/1,
          run/2,
          run_sync/1,
@@ -42,12 +42,12 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link(Image, Opts) ->
+    gen_server:start_link(?MODULE, [Image, Opts], []).
 
 
-create(Pid, Image, Opts) ->
-    gen_server:call(Pid, {create, Image, Opts}).
+fetch(Pid) ->
+    gen_server:call(Pid, fetch).
 
 
 run(Pid, Opts) ->
@@ -74,11 +74,7 @@ stop_sync(Pid) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([]) ->
-    {ok, #state { }}.
-
-
-handle_call({create, #image { command = Cmd } = Image, Opts}, _From, State) ->
+init([#image { command = Cmd } = Image, Opts]) ->
     {ok, Layer} = illithid_engine_layer:new(Image),
     Container = #container {
                    id         = illithid_engine_util:uuid(),
@@ -87,7 +83,12 @@ handle_call({create, #image { command = Cmd } = Image, Opts}, _From, State) ->
                    layer      = Layer,
                    parameters = Opts
                   },
-    {reply, Container, State#state { container = Container }};
+    illithid_engine_metadata:add_container(Container),
+    {ok, #state { container = Container }}.
+
+
+handle_call(fetch, _From, #state { container = Container } = State) ->
+    {reply, Container, State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,

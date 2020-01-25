@@ -26,10 +26,7 @@
 -include_lib("include/illithid.hrl").
 
 %% API
--export([create_image/1, create_image/2,
-         get_image/1,
-         list_images/0,
-         add_image/1]).
+-export([create_image/1, create_image/2]).
 
 -record(build_state, {
           instructions = none,
@@ -43,20 +40,10 @@
          image_table = image_table
          }).
 
-add_image(Image) ->
-    gen_server:cast(?SERVER, {add, Image}).
-
-
-list_images() ->
-    gen_server:call(?SERVER, list).
-
-
-get_image(ImageId) ->
-    gen_server:call(?SERVER, {get_image, ImageId}).
-
 
 create_image(Instructions) ->
     create_image(Instructions, "./").
+
 
 create_image(Instructions, ContextPath) ->
     ImageRecord = #image { tag = none, layers = [], command = none },
@@ -75,32 +62,11 @@ start_link() ->
 %%%===================================================================
 
 init([]) ->
-    ets:new(image_table, [protected, named_table, {keypos, 2}]),
-    ets:insert(image_table, ?BASE_IMAGE),
     {ok, #state{}}.
 
-handle_call({get_image, ImageId}, _From, State) ->
-    Image = get_image_(ImageId),
-    {reply, Image, State};
-
-
-handle_call(list, _From, State) ->
-    ImagesAll = ets:match_object(image_table, '$1'),
-    ImagesUnordered = lists:filter(fun(Image) ->
-                                  case Image#image.id of
-                                      base -> false;
-                                      _ -> true
-                                  end
-                          end, ImagesAll),
-    Images = lists:reverse(lists:sort(
-               fun(#image { created = A }, #image { created = B }) ->
-                       A =< B
-               end, ImagesUnordered)),
-    {reply, Images, State};
 
 handle_call({create, BuildState}, _From, State) ->
-    {ok, Image} = Reply = proces_instructions(BuildState),
-    ets:insert(image_table, Image),
+    {ok, _Image} = Reply = proces_instructions(BuildState),
     {reply, Reply, State};
 
 
@@ -108,10 +74,6 @@ handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
 
-
-handle_cast({add, Image}, State) ->
-    ets:insert(image_table, Image),
-    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -134,7 +96,7 @@ code_change(_OldVsn, State, _Extra) ->
 proces_instructions(#build_state { instructions = [ {from, ImageId} | Rest ] } = State) ->
     NewState = State#build_state {
                   instructions = Rest,
-                  image_record = get_image_(ImageId)
+                  image_record = illithid_engine_metadata:get_image(ImageId)
                  },
     proces_instructions(NewState);
 
@@ -143,8 +105,8 @@ proces_instructions(#build_state {
                        image_record = #image { layers = Layers } = Image
                        } = State) ->
 
-    {ok, Pid } = illithid_engine_container_pool:new(),
-    #container { layer = #layer{ id = LayerId }} = illithid_engine_container:create(Pid, Image#image { command = Cmd}, []),
+    {ok, Pid} = illithid_engine_container_pool:create(Image#image { command = Cmd}, []),
+    #container { layer = #layer{ id = LayerId }} = illithid_engine_container:fetch(Pid),
     {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid),
     {ok, LayerUpd} = illithid_engine_layer:finalize_layer(LayerId),
 
@@ -177,13 +139,9 @@ proces_instructions(#build_state { instructions = [ {cmd, Args} | Rest ], image_
     proces_instructions(NewState);
 
 proces_instructions(#build_state { instructions = [], image_record = #image { layers = [#layer { id = ImageId } | _Rest] } = Image }) ->
-    {ok, Image#image {id = ImageId, created = erlang:timestamp() }}.
-
-
-get_image_(ImageId) ->
-    lager:info("Fetching image for id ~p", [ImageId]),
-    [Image] = ets:lookup(image_table, ImageId),
-    Image.
+    FinishedImage = Image#image {id = ImageId, created = erlang:timestamp() },
+    illithid_engine_metadata:add_image(FinishedImage),
+    {ok, FinishedImage}.
 
 
 copy_files(ContextRoot, JailRoot, SrcAndDest) ->

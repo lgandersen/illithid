@@ -26,7 +26,7 @@
 -include_lib("include/illithid.hrl").
 -define(SERVER, ?MODULE).
 
--record(state, { listening_socket = none, listener_pid = none }).
+-record(state, { listening_socket = none, socket = none, listener_pid = none }).
 
 %%%===================================================================
 %%% API
@@ -54,6 +54,14 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+
+%% From illithid_engine_container
+handle_info({client_connection, Socket}, State) ->
+    {noreply, State#state { socket = Socket}};
+
+handle_info({Pid, Msg}, #state { socket = Socket } = State) when is_pid(Pid) ->
+    send_to_cli(Msg, Socket),
+    {noreply, State};
 
 handle_info({tcp, Socket, Cmd}, State) ->
     handle_command(erlang:binary_to_term(Cmd), Socket),
@@ -84,6 +92,7 @@ listen(APIProces, LSocket) ->
         {ok, Socket} ->
             gen_tcp:controlling_process(Socket, APIProces),
             inet:setopts(Socket, [{active, true}]),
+            APIProces ! {client_connection, Socket},
             listen(APIProces, LSocket);
 
         {error, Reason} ->
@@ -92,31 +101,32 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
-handle_command({run, ImageIdOrTag}, Socket) ->
-    %%FIXME: Draft of this function clause. Not testeted throughout the stack
-    Image = illithid_engine_image:get_image(ImageIdOrTag),
-    {ok, Pid} = illithid_engine_container:create(Image),
-    ok = illithid_engine_container:run(Pid),
-    send_reply(ok, Socket);
+handle_command({run, ImageIdentifier}, _Socket) ->
+    %%FIXME: This function clause is not testeted
+    Image = illithid_engine_image:get_image(ImageIdentifier),
+    {ok, Pid} = illithid_engine_container_pool:create(Image, []),
+    ok = illithid_engine_container:run(Pid, [{relay_to, self()}]);
 
 handle_command(list_images, Socket) ->
-    Images = illithid_engine_image:list_images(),
-    send_reply(Images, Socket);
+    Images = illithid_engine_metadata:list_images(),
+    send_to_cli(Images, Socket),
+    gen_tcp:close(Socket);
 
 handle_command(clear_zroot, Socket) ->
     ok = illithid_engine_zfs:clear_zroot(),
-    send_reply(ok, Socket);
+    gen_tcp:close(Socket);
 
 handle_command({build, Path}, Socket) ->
     Instructions = illithid_engine_dockerfile:parse(Path),
     {ok, Layers} = illithid_engine_image:create_image(Instructions, Path),
-    send_reply({ok, Layers}, Socket);
+    send_to_cli({ok, Layers}, Socket),
+    gen_tcp:close(Socket);
 
 handle_command(UnkownCommand, _Socket) ->
     lager:warning("Command ~p not understood.", [UnkownCommand]).
 
 
-send_reply(Term, Socket) ->
+send_to_cli(Term, Socket) ->
     TermBin = erlang:term_to_binary(Term),
     ok = gen_tcp:send(Socket, TermBin),
     ok.

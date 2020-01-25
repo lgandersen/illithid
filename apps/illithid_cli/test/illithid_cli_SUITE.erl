@@ -136,6 +136,14 @@ t_list_image(_Config) ->
     ok.
 
 
+t_run_image(Config) ->
+    %%FIXME: need to support tagging to be able to make a proper cli-test.
+    Path = ?config(data_dir, Config),
+    run_cli_command("illithid build " ++ Path),
+    Msg = run_cli_command("illithid build " ++ Path),
+    ok.
+
+
 print_many_lines(Text) ->
     Lines = string:split(Text, "\n"),
     lists:map(fun(Line) -> lager:info(Line) end, Lines),

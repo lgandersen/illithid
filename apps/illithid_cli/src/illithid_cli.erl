@@ -6,7 +6,10 @@
 
 main(Cmd) ->
     illithid_cli_engine_client:start_link(),
-    main_(Cmd).
+    main_(Cmd),
+    receive
+        done -> ok
+    end.
 
 main_(["images"]) ->
     illithid_cli_engine_client:command(list_images),
@@ -21,11 +24,23 @@ main_(["build", Path]) ->
     ok;
 
 main_(["run", Image]) ->
-    %% Image can be a ImageId or a tag
-    illithid_cli_engine_client:command({run, Image}),
+    %% FIXME: This it not implemented. Moved the 'parse_image' functionality into illithid_engine_metadata
+    illithid_cli_engine_client:command({run, parse_image(Image)}),
     ok;
 
 
 main_(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
 
+parse_image("base") ->
+    base;
+
+parse_image(Image) ->
+    %% Image can be a ImageId or a tag
+    case string:split(Image, ":") of
+        [Name,Tag] ->
+            {tag, Name, Tag};
+
+        NameId ->
+            {name_or_id, NameId}
+    end.

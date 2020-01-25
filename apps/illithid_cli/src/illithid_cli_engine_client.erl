@@ -25,7 +25,7 @@
 -define(SERVER, ?MODULE).
 -include_lib("include/illithid.hrl").
 
--record(state, { socket = none, cmd = none }).
+-record(state, { socket = none, cmd = none, cli_pid = none }).
 
 
 %%%===================================================================
@@ -33,7 +33,7 @@
 %%%===================================================================
 
 start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [self()], []).
 
 
 command(Cmd) ->
@@ -43,10 +43,10 @@ command(Cmd) ->
 %%% gen_server callbacks
 %%%===================================================================
 
-init([]) ->
+init([CliPid]) ->
     case gen_tcp:connect({local, ?API_SOCKET}, 0, [binary, {packet, raw}, {active, true}]) of
         {ok, Socket} ->
-            {ok, #state{ socket = Socket}};
+            {ok, #state{ socket = Socket, cli_pid = CliPid }};
 
         {error, Reason} ->
             io:format("Error! Could not connect to backend on ~p~n", [?API_SOCKET]),
@@ -63,7 +63,7 @@ handle_cast({send, Cmd}, #state { socket = Socket } = State) ->
     CmdBin = erlang:term_to_binary(Cmd),
     case gen_tcp:send(Socket, CmdBin) of
         ok ->
-            {noreply, State};
+            {noreply, State#state { cmd = Cmd }};
 
         {error, Reason} ->
             io:format("Sending command to backend failed: ~p~n", [Reason]),
@@ -74,11 +74,13 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({tcp_closed, _Socket}, State) ->
+handle_info({tcp_closed, _Socket}, #state { cli_pid = CliPid } = State) ->
+    CliPid ! done,
     {stop, tcp_closed, State};
 
-handle_info({tcp_error, _Socket, Reason}, State) ->
+handle_info({tcp_error, _Socket, Reason}, #state { cli_pid = CliPid } = State) ->
     io:format("An error occured while communicating with the backend: ~s", [Reason]),
+    CliPid ! done,
     {stop, {tcp_error, Reason}, State};
 
 

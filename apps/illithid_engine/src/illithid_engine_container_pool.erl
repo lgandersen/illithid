@@ -1,9 +1,11 @@
 -module(illithid_engine_container_pool).
 -behaviour(supervisor).
 
+-include_lib("include/illithid.hrl").
+
 %% API.
 -export([start_link/0,
-         new/0,
+         create/2,
          stop/1
         ]).
 
@@ -26,12 +28,12 @@ stop(Pid) ->
     supervisor:terminate_child({local, ?MODULE}, Pid).
 
 
--spec new() -> {ok, Pid} | {error, Reason}
+-spec create(Image :: #image{}, Opts :: [term()]) -> {ok, Pid} | {error, Reason}
     when
         Pid    :: pid(),
         Reason :: term().
-new() ->
-    supervisor:start_child(?SERVER, []).
+create(Image, Opts) ->
+    supervisor:start_child(?SERVER, [Image, Opts]).
 
 
 %% @private
