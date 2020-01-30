@@ -60,12 +60,11 @@ groups() ->
 %%% Overall setup/teardown
 %%%===================================================================
 init_per_suite(Config) ->
-    illithid_engine_zfs:clear_zroot(),
     lager:start(),
     Config.
 
 end_per_suite(_Config) ->
-    %illithid_engine_zfs:clear_zroot(),
+    illithid_engine_zfs:clear_zroot(),
     ok.
 
 
@@ -87,7 +86,9 @@ end_per_group(_Groupname, _Config) ->
 %%% Testcase specific setup/teardown
 %%%===================================================================
 init_per_testcase(_TestCase, Config) ->
+    illithid_engine_zfs:clear_zroot(),
     ok = application:start(illithid_engine),
+    illithid_engine_metadata:clear_all(),
     Config.
 
 end_per_testcase(_TestCase, _Config) ->
@@ -124,8 +125,8 @@ t_list_image(_Config) ->
                tag     = "test:oldest",
                created = {1578,330200,0}
               },
-    illithid_engine_image:add_image(Image1),
-    illithid_engine_image:add_image(Image2),
+    illithid_engine_metadata:add_image(Image1),
+    illithid_engine_metadata:add_image(Image2),
     ImageList = run_cli_command("illithid images"),
     [_ | Output ] = string:tokens(ImageList, "\n"),
     ExpectedOutput = [

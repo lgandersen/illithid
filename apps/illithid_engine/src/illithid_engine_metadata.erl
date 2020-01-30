@@ -17,7 +17,8 @@
          add_image/1,
          get_image/1,
          list_images/0,
-         add_container/1]).
+         add_container/1,
+         clear_all/0]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -65,6 +66,12 @@ list_images() ->
                        A =< B
                end, ImagesUnordered)),
     Images.
+
+
+clear_all() ->
+    {atomic, ok} = mnesia:clear_table(image),
+    add_image(?BASE_IMAGE),
+    {atomic, ok} = mnesia:clear_table(container).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -142,5 +149,12 @@ get_ordered_images_test() ->
     ?assertEqual({atomic, ok}, add_image(Image)),
     Images = list_images(),
     ?assertMatch([Image, #image{ tag = "test:oldest"}], Images).
+
+
+close_mnesia_test() ->
+    clear_all(),
+    ?assertMatch({error, {already_started, _Pid}}, illithid_engine_metadata:start_link()),
+    {error, {already_started, Pid}} = illithid_engine_metadata:start_link(),
+    ?assertEqual(ok, gen_server:stop(Pid)).
 
 -endif.

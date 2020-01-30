@@ -74,7 +74,6 @@ create_image_with_copy([_]) ->
                     ],
     {ok, #image {
             layers = [ #layer { path = Path }, ?BASE_LAYER ] } } = illithid_engine_image:create_image(Instructions, Context),
-    io:format(user, "LOL~p~n", [Path]),
     ?_assertEqual({ok, <<"lol\n">>}, file:read_file(Path ++ "/root/test.txt")).
 
 

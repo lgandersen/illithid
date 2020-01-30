@@ -25,7 +25,7 @@
 -define(SERVER, ?MODULE).
 -include_lib("include/illithid.hrl").
 
--record(state, { socket = none, cmd = none, cli_pid = none }).
+-record(state, { socket = none, cmd = none, cli_pid = none, buffer = <<>> }).
 
 
 %%%===================================================================
@@ -84,10 +84,18 @@ handle_info({tcp_error, _Socket, Reason}, #state { cli_pid = CliPid } = State) -
     {stop, {tcp_error, Reason}, State};
 
 
-handle_info({tcp, _Socket, ReplyBin}, #state { cmd = Cmd } = State) ->
-    Reply = erlang:binary_to_term(ReplyBin),
-    handle_reply(Cmd, Reply),
-    {noreply, State}.
+handle_info({tcp, _Socket, ReplyBin}, #state { cmd = Cmd, buffer = Buffer } = State) ->
+    %% TODO: The present buffering is not entirely safe (although in a request/reply setting it is:
+    %% binary_to_term silently drops bytes that is not part of the encoded term
+    NewBuffer = <<Buffer/binary, ReplyBin/binary>>,
+    case erlang:binary_to_term(NewBuffer) of
+        badarg ->
+            {noreply, State#state{ buffer = NewBuffer }};
+
+        Reply ->
+            handle_reply(Cmd, Reply),
+            {noreply, State#state { buffer = <<>> }}
+    end.
 
 
 terminate(_Reason, _State) ->

@@ -42,6 +42,9 @@ init([]) ->
                   #{id      => illithid_engine_image,
                     start   => {illithid_engine_image, start_link, []}
                    },
+                  #{id      => illithid_engine_metadata,
+                    start   => {illithid_engine_metadata, start_link, []}
+                   },
                   #{id      => illithid_engine_container_pool,
                     start   => {illithid_engine_container_pool, start_link, []},
                     type    => supervisor

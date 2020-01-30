@@ -102,7 +102,7 @@ listen(APIProces, LSocket) ->
     end.
 
 handle_command({run, ImageIdentifier}, _Socket) ->
-    %%FIXME: This function clause is not testeted
+    %%FIXME: Test me!
     Image = illithid_engine_image:get_image(ImageIdentifier),
     {ok, Pid} = illithid_engine_container_pool:create(Image, []),
     ok = illithid_engine_container:run(Pid, [{relay_to, self()}]);
