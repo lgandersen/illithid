@@ -115,7 +115,7 @@ handle_reply(list_images, Images) ->
     io:format("REPOSITORY    TAG               IMAGE ID         CREATED               SIZE\n"),
     print_images(Images);
 
-handle_reply({build, Path}, {ok, Image}) ->
+handle_reply({build, Path, _NameTag}, {ok, Image}) ->
     io:format("Succesfully built image from ~p~n", [Path]),
     io:format("Image id: ~s~n", [Image#image.id]);
 

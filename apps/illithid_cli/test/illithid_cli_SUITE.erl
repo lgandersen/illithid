@@ -108,6 +108,7 @@ t_clear_all(_Config) ->
 t_build_simple_image(Config) ->
     Path = ?config(data_dir, Config),
     Msg = run_cli_command("illithid build " ++ Path),
+    ?assertMatch([_, _Id], string:split(Msg, "Image id: ")),
     [_, Id] = string:split(Msg, "Image id: "),
     timer:sleep(1000),
     {ok, <<"lol\n">>} = file:read_file("/" ++ ?ZROOT ++ "/" ++ lists:droplast(Id) ++ "/root/test.txt"),
@@ -118,12 +119,12 @@ t_list_image(_Config) ->
     Image1 = #image {
                id      = "lolololololooooooooooooooool",
                tag     = "test:latest",
-               created = {1578,330264,608742}
+               created = {1578, 330264, 608742}
               },
     Image2 = #image {
                id      = "leleleleleleeeeee",
                tag     = "test:oldest",
-               created = {1578,330200,0}
+               created = {1578, 330200, 0}
               },
     illithid_engine_metadata:add_image(Image1),
     illithid_engine_metadata:add_image(Image2),

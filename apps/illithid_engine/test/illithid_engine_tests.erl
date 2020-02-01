@@ -29,6 +29,22 @@ container_test_() ->
      }.
 
 
+create_container_async([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
+    ?_assertEqual(ok, illithid_engine_container:run(Pid)).
+
+
+create_container_sync([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
+    ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)).
+
+
+container_shutdown_sync([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/sh", "/etc/rc"] }, Opts),
+    [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)),
+    {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_sync(Pid))}].
+
+
 image_building_start() ->
     lager:start(),
     ok = illithid_engine_zfs:clear_zroot(),
@@ -49,22 +65,6 @@ image_building_test_() ->
                                         fun create_image_three_layers/1
                                         ]
      }.
-
-
-create_container_async([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
-    ?_assertEqual(ok, illithid_engine_container:run(Pid)).
-
-
-create_container_sync([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
-    ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)).
-
-
-container_shutdown_sync([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/sh", "/etc/rc"] }, Opts),
-    [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)),
-    {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_sync(Pid))}].
 
 
 create_image_with_copy([_]) ->

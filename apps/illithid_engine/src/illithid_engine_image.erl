@@ -66,7 +66,7 @@ init([]) ->
 
 
 handle_call({create, BuildState}, _From, State) ->
-    {ok, _Image} = Reply = proces_instructions(BuildState),
+    Reply = proces_instructions(BuildState),
     {reply, Reply, State};
 
 
@@ -140,7 +140,6 @@ proces_instructions(#build_state { instructions = [ {cmd, Args} | Rest ], image_
 
 proces_instructions(#build_state { instructions = [], image_record = #image { layers = [#layer { id = ImageId } | _Rest] } = Image }) ->
     FinishedImage = Image#image {id = ImageId, created = erlang:timestamp() },
-    illithid_engine_metadata:add_image(FinishedImage),
     {ok, FinishedImage}.
 
 

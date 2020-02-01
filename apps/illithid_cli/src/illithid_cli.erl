@@ -20,7 +20,13 @@ main_(["clear", "all"]) ->
     ok;
 
 main_(["build", Path]) ->
-    illithid_cli_engine_client:command({build, Path ++ "/Dockerfile"}),
+    illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", {none, none}}),
+    ok;
+
+main_(["build", "-t", NameTagRaw, Path]) ->
+    %%TODO NameTag should be probably be sanity-checked and converted to {Name, Tag}
+    {_Name, _Tag} = NameTag = parse_nametag(NameTagRaw),
+    illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", NameTag}),
     ok;
 
 main_(["run", Image]) ->
@@ -31,6 +37,7 @@ main_(["run", Image]) ->
 
 main_(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
+
 
 parse_image("base") ->
     base;
@@ -43,4 +50,18 @@ parse_image(Image) ->
 
         NameId ->
             {name_or_id, NameId}
+    end.
+
+
+parse_nametag(NameTag) ->
+    case string:split(NameTag, ":") of
+        [Name,Tag] ->
+            {Name, Tag};
+
+        [_, _ | _] ->
+            io:format("Unable to parse '-t <name>:<tag>' input.");
+
+        Name ->
+            {Name, "latest"}
+
     end.

@@ -11,6 +11,7 @@
 -behaviour(gen_server).
 
 -include_lib("include/illithid.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 %% API
 -export([start_link/0,
@@ -45,12 +46,12 @@ add_container(Container) ->
 
 
 add_image(Image) ->
-    mnesia:transaction(fun() -> mnesia:write(Image) end).
+    mnesia:transaction(fun add_image_/1, [Image]).
 
 
 get_image(ImageId) ->
-    {atomic, [Image]} = mnesia:transaction(fun() -> mnesia:read(image, ImageId) end),
-    Image.
+    {atomic, Result} = mnesia:transaction(fun get_image_/1, [ImageId]),
+    Result.
 
 
 list_images() ->
@@ -117,6 +118,45 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+add_image_(#image { name = Name, tag = Tag } = Image) ->
+    Match = ets:fun2ms(
+              fun(#image { name = ImgName, tag = ImgTag } = Img)
+                    when ImgName =:= Name, ImgTag =:= Tag ->
+                      Img
+              end),
+
+    case mnesia:select(image, Match) of
+        [ExistingImage] ->
+            mnesia:write(ExistingImage#image { name = none, tag = none });
+        [] ->
+            ok
+    end,
+    mnesia:write(Image).
+
+
+get_image_(IdOrTag) ->
+    case mnesia:read(image, IdOrTag) of
+        [Image] ->
+            Image;
+
+        [] ->
+            %% The identifier was not an Id. Try looking for tag instead
+            {Name, Tag} = illithid_engine_util:decode_tagname(IdOrTag),
+            Match = ets:fun2ms(
+                      fun(#image { name = ImgName, tag = ImgTag } = Img)
+                            when ImgName =:= Name, ImgTag =:= Tag ->
+                              Img
+                      end),
+
+            case mnesia:select(image, Match) of
+                [Image] ->
+                    Image;
+
+                [] ->
+                    not_found
+            end
+    end.
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -131,24 +171,42 @@ add_container_test() ->
 
 
 add_and_get_image_test() ->
-    Image = #image {
+    Image1 = #image {
                id      = "lolololololooooooooooooooool",
-               tag     = "test:oldest",
+               name    = "test",
+               tag     = "oldest",
                created = erlang:timestamp()
               },
-    ?assertEqual({atomic, ok}, add_image(Image)),
-    ?assertEqual(Image, get_image(Image#image.id)).
+    ?assertEqual({atomic, ok}, add_image(Image1)),
+    Image2 = #image {
+               id      = "leleleleleleeeeee",
+               name    = "test",
+               tag     = "latest",
+               created = erlang:timestamp()
+              },
+    ?assertEqual({atomic, ok}, add_image(Image2)),
+    ?assertEqual(Image1, get_image(Image1#image.id)),
+    ?assertEqual(Image1, get_image("test:oldest")),
+    ?assertEqual(Image2, get_image("test")).
 
 
 get_ordered_images_test() ->
+    Images = list_images(),
+    ?assertMatch([Image, #image{ tag = "oldest"}], Images).
+
+
+reset_tag_if_new_with_same_is_inserted() ->
     Image = #image {
-               id      = "leleleleleleeeeee",
-               tag     = "test:latest",
+               id      = "originalimage",
+               name    = "testing",
+               tag     = "latest",
                created = erlang:timestamp()
               },
     ?assertEqual({atomic, ok}, add_image(Image)),
+    ImageOverwrite = Image#image { id = "newimage", created = erlang:timestamp()},
+    ?assertEqual({atomic, ok}, add_image(ImageOverwrite)),
     Images = list_images(),
-    ?assertMatch([Image, #image{ tag = "test:oldest"}], Images).
+    ?assertMatch([#image { id = "newimage" }, #image{ id = "originalimage", name = none, tag = none} | _], Images).
 
 
 close_mnesia_test() ->

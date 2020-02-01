@@ -116,10 +116,11 @@ handle_command(clear_zroot, Socket) ->
     ok = illithid_engine_zfs:clear_zroot(),
     gen_tcp:close(Socket);
 
-handle_command({build, Path}, Socket) ->
+handle_command({build, Path, {Name, Tag}}, Socket) ->
     Instructions = illithid_engine_dockerfile:parse(Path),
-    {ok, Layers} = illithid_engine_image:create_image(Instructions, Path),
-    send_to_cli({ok, Layers}, Socket),
+    {ok, Image} = illithid_engine_image:create_image(Instructions, Path),
+    illithid_engine_metadata:add_image(Image#image { name = Name, tag = Tag }),
+    send_to_cli({ok, Image}, Socket),
     gen_tcp:close(Socket);
 
 handle_command(UnkownCommand, _Socket) ->
