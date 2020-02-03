@@ -76,12 +76,12 @@ handle_cast(_Msg, State) ->
 
 handle_info({tcp_closed, _Socket}, #state { cli_pid = CliPid } = State) ->
     CliPid ! done,
-    {stop, tcp_closed, State};
+    {stop, {shutdown, tcp_closed}, State};
 
 handle_info({tcp_error, _Socket, Reason}, #state { cli_pid = CliPid } = State) ->
     io:format("An error occured while communicating with the backend: ~s", [Reason]),
     CliPid ! done,
-    {stop, {tcp_error, Reason}, State};
+    {stop, {shutdown, {tcp_error, Reason}}, State};
 
 
 handle_info({tcp, _Socket, ReplyBin}, #state { cmd = Cmd, buffer = Buffer } = State) ->
@@ -95,7 +95,13 @@ handle_info({tcp, _Socket, ReplyBin}, #state { cmd = Cmd, buffer = Buffer } = St
         Reply ->
             handle_reply(Cmd, Reply),
             {noreply, State#state { buffer = <<>> }}
-    end.
+    end;
+
+
+handle_info(Info, State) ->
+    lager:warning("Unkown message received: ~p ~n", [Info]),
+    {noreply, State}.
+
 
 
 terminate(_Reason, _State) ->
@@ -108,6 +114,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+%%FIXME: Consider moving this to the cli. But in a way that makes it easily testable.
+%% perhaps io_lib:format should be used instead and the out sent to the cli. This would
+%% make it possible to easily test the messages back'n'forth before testing the cli-tool itself
+%% using os:cmd/1
 handle_reply(clear_zroot, _) ->
     io:format("ZRoot cleared!~n");
 
@@ -119,7 +129,11 @@ handle_reply({build, Path, _NameTag}, {ok, Image}) ->
     io:format("Succesfully built image from ~p~n", [Path]),
     io:format("Image id: ~s~n", [Image#image.id]);
 
+handle_reply({run, ImageIdentifier}, Reply) ->
+    io:format(user, "LOOOL~p: ~p~n", [ImageIdentifier, Reply]);
+
 handle_reply(_Request, Reply) ->
+    io:format(user, "LEEEL: ~p~n", [Reply]),
     Reply.
 
 
@@ -148,3 +162,44 @@ cell(Content, Size) ->
         false ->
             string:sub_string(Content, 1, Size)
     end.
+
+
+
+%-ifdef(TEST).
+%-include_lib("eunit/include/eunit.hrl").
+%
+%initialize() ->
+%    illithid_engine_zfs:clear_zroot(),
+%    ok = application:start(illithid_engine),
+%    illithid_engine_metadata:clear_all(),
+%    ok.
+%
+%stop(_) ->
+%    ok = application:stop(illithid_engine),
+%    ok.
+%
+%instructions_test_() ->
+%     {foreach, fun initialize/0, fun stop/1, [
+%                                  fun test_build_image/1
+%                                  ]
+%     }.
+%
+%
+%%% FIXME WIP
+%test_build_image(_) ->
+%    {ok, Pid} = illithid_cli_engine_client:start_link(),
+%    unlink(Pid),
+%    Path = "./apps/illithid_cli/test/illithid_cli_SUITE_data/Dockerfile",
+%    io:format(user, "Command not understood: DSDFSDFDSF~n", []),
+%    illithid_cli_engine_client:command({build, Path, {"testcliengine", "latest"}}),
+%    receive
+%        done ->
+%            io:format(user, "HMMM~n", []),
+%            ok;
+%
+%        UnkownMsg ->
+%            io:format(user, "Command not understood: ~p~n", [UnkownMsg])
+%    end,
+%    ?_assertEqual(ok, ok).
+%
+%-endif.
