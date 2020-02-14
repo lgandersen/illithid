@@ -59,7 +59,7 @@ handle_cast(_Msg, State) ->
 handle_info({client_connection, Socket}, State) ->
     {noreply, State#state { socket = Socket}};
 
-handle_info({Pid, Msg}, #state { socket = Socket } = State) when is_pid(Pid) ->
+handle_info({container_msg, {Pid, Msg}}, #state { socket = Socket } = State) when is_pid(Pid) ->
     send_to_cli(Msg, Socket),
     {noreply, State};
 
@@ -102,26 +102,23 @@ listen(APIProces, LSocket) ->
     end.
 
 handle_command({run, ImageIdentifier}, _Socket) ->
-    %%FIXME: Test me!
-    Image = illithid_engine_image:get_image(ImageIdentifier),
+    Image = illithid_engine_metadata:get_image(ImageIdentifier),
     {ok, Pid} = illithid_engine_container_pool:create(Image, []),
     ok = illithid_engine_container:run(Pid, [{relay_to, self()}]);
 
 handle_command(list_images, Socket) ->
     Images = illithid_engine_metadata:list_images(),
-    send_to_cli(Images, Socket),
-    gen_tcp:close(Socket);
+    send_to_cli(Images, Socket);
 
 handle_command(clear_zroot, Socket) ->
     ok = illithid_engine_zfs:clear_zroot(),
-    gen_tcp:close(Socket);
+    send_to_cli(ok, Socket);
 
 handle_command({build, Path, {Name, Tag}}, Socket) ->
     Instructions = illithid_engine_dockerfile:parse(Path),
     {ok, Image} = illithid_engine_image:create_image(Instructions, Path),
     illithid_engine_metadata:add_image(Image#image { name = Name, tag = Tag }),
-    send_to_cli({ok, Image}, Socket),
-    gen_tcp:close(Socket);
+    send_to_cli({ok, Image}, Socket);
 
 handle_command(UnkownCommand, _Socket) ->
     lager:warning("Command ~p not understood.", [UnkownCommand]).

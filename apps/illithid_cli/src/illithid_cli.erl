@@ -1,15 +1,19 @@
 -module(illithid_cli).
 
 -export([main/1]).
+-ifdef(TEST).
+-export([main_/1]).
+-endif.
+
 
 -include_lib("include/illithid.hrl").
 
 main(Cmd) ->
-    illithid_cli_engine_client:start_link(),
+    register(cli_process, self()),
+    {ok, Pid} = illithid_cli_engine_client:start_link(),
+    unlink(Pid),
     main_(Cmd),
-    receive
-        done -> ok
-    end.
+    relay_messages().
 
 main_(["images"]) ->
     illithid_cli_engine_client:command(list_images),
@@ -24,33 +28,18 @@ main_(["build", Path]) ->
     ok;
 
 main_(["build", "-t", NameTagRaw, Path]) ->
-    %%TODO NameTag should be probably be sanity-checked and converted to {Name, Tag}
+    %%TODO NameTag should be probably be sanity-checked using a regex
     {_Name, _Tag} = NameTag = parse_nametag(NameTagRaw),
     illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", NameTag}),
     ok;
 
-main_(["run", Image]) ->
-    %% FIXME: This it not implemented. Moved the 'parse_image' functionality into illithid_engine_metadata
-    illithid_cli_engine_client:command({run, parse_image(Image)}),
+main_(["run", ImageIdentifier]) ->
+    illithid_cli_engine_client:command({run, ImageIdentifier}),
     ok;
 
 
 main_(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
-
-
-parse_image("base") ->
-    base;
-
-parse_image(Image) ->
-    %% Image can be a ImageId or a tag
-    case string:split(Image, ":") of
-        [Name,Tag] ->
-            {tag, Name, Tag};
-
-        NameId ->
-            {name_or_id, NameId}
-    end.
 
 
 parse_nametag(NameTag) ->
@@ -64,4 +53,15 @@ parse_nametag(NameTag) ->
         Name ->
             {Name, "latest"}
 
+    end.
+
+
+relay_messages() ->
+    receive
+        done ->
+            ok;
+
+        Msg ->
+            io:format(Msg),
+            relay_messages()
     end.

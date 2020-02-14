@@ -134,6 +134,9 @@ add_image_(#image { name = Name, tag = Tag } = Image) ->
     mnesia:write(Image).
 
 
+get_image_("base") ->
+    ?BASE_IMAGE;
+
 get_image_(IdOrTag) ->
     case mnesia:read(image, IdOrTag) of
         [Image] ->

@@ -74,7 +74,8 @@ stop_sync(Pid) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([#image { command = Cmd } = Image, Opts]) ->
+init([Image, Opts]) ->
+    #image { command = Cmd } = Image,
     {ok, Layer} = illithid_engine_layer:new(Image),
     Container = #container {
                    id         = illithid_engine_util:uuid(),
@@ -133,7 +134,7 @@ handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = Relay
             ok;
 
         Pid when is_pid(Pid) ->
-            RelayTo ! {self(), Msg}
+            RelayTo ! {container_msg, {self(), Msg}}
     end,
     {noreply, State};
 
@@ -155,10 +156,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 receive_exit_status(Pid) ->
     receive
-        {Pid, {exit_status, N}} ->
+        {container_msg, {Pid, {exit_status, N}}} ->
             {ok, {exit_status, N}};
 
-        {Pid, _Msg} ->
+        {container_msg, {Pid, _Msg}} ->
             receive_exit_status(Pid)
     end.
 

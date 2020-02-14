@@ -35,5 +35,11 @@
           created = none
          }).
 
+
 -define(BASE_LAYER, #layer {id = base, location = ?BASE_LAYER_LOCATION, path = ?BASE_LAYER_PATH }).
 -define(BASE_IMAGE, #image {id = base, tag = "base", layers = [?BASE_LAYER]}).
+
+
+
+-define(LOG(Msg, Args), io:format(Msg, Args)).
+-define(LOG(Msg), ?LOG(Msg, [])).

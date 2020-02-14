@@ -57,7 +57,7 @@ init([]) ->
 
 
 handle_call({new, LayerId}, _From, State) ->
-    io:format(user, "Creating new layer based on ~p", [LayerId]),
+    ?LOG("Creating new layer based on ~s~n", [LayerId]),
     {ok, Layer} = Reply = initialize_layer(LayerId),
     ets:insert(layer_table, [Layer]),
     {reply, Reply, State};
