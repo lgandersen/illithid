@@ -101,9 +101,15 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
-handle_command({run, ImageIdentifier}, _Socket) ->
+handle_command({run, ImageIdentifier, Command}, _Socket) ->
     Image = illithid_engine_metadata:get_image(ImageIdentifier),
-    {ok, Pid} = illithid_engine_container_pool:create(Image, []),
+    {ok, Pid} = case Command of
+        none ->
+            illithid_engine_container_pool:create(Image, []);
+
+        [_Cmd|_Args] ->
+            illithid_engine_container_pool:create(Image#image { command = Command }, [])
+    end,
     ok = illithid_engine_container:run(Pid, [{relay_to, self()}]);
 
 handle_command(list_images, Socket) ->

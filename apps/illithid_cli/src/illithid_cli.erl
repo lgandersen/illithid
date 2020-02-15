@@ -33,8 +33,12 @@ main_(["build", "-t", NameTagRaw, Path]) ->
     illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", NameTag}),
     ok;
 
-main_(["run", ImageIdentifier]) ->
-    illithid_cli_engine_client:command({run, ImageIdentifier}),
+main_(["run", Image]) ->
+    illithid_cli_engine_client:command({run, Image, none}),
+    ok;
+
+main_(["run", Image | Command]) ->
+    illithid_cli_engine_client:command({run, Image, Command}),
     ok;
 
 

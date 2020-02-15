@@ -41,5 +41,5 @@
 
 
 
--define(LOG(Msg, Args), io:format(Msg, Args)).
+-define(LOG(Msg, Args), io:format(user, Msg, Args)).
 -define(LOG(Msg), ?LOG(Msg, [])).
