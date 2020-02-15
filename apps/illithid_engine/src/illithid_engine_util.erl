@@ -12,8 +12,9 @@ decode_tagname(TagName) ->
     end.
 
 uuid() ->
-    Input = erlang:pid_to_list(self()) ++ erlang:binary_to_list(erlang:term_to_binary(erlang:timestamp())),
-    binary_to_list(hex_digest(Input)).
+    InputAll = erlang:pid_to_list(self()) ++ erlang:binary_to_list(erlang:term_to_binary(erlang:timestamp())),
+    Input = binary:part(hex_digest(InputAll), {0, 12}),
+    binary_to_list(Input).
 
 hex_digest(Binary) ->
     << << if N >= 10 -> N -10 + $a;
