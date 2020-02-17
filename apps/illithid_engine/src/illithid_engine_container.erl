@@ -55,7 +55,7 @@ run(Pid, Opts) ->
 
 
 run(Pid) ->
-    gen_server:cast(Pid, run).
+    gen_server:cast(Pid, {run, []}).
 
 
 run_sync(Pid) ->
@@ -96,14 +96,12 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({run, Opts}, #state { container = Container } = State) ->
+handle_cast({run, Opts}, #state { container = #container { parameters = Param } = Container } = State) ->
     RelayTo = proplists:get_value(relay_to, Opts, none),
-    Port = run_(Container),
+    User = proplists:get_value(user, Opts, "root"),
+    UserParam = "exec.jail_user=" ++ User,
+    Port = run_(Container#container { parameters = [ UserParam | Param ]}),
     {noreply, State#state { starting_port = Port, relay_to = RelayTo }};
-
-handle_cast(run, #state { container = Container } = State) ->
-    Port = run_(Container),
-    {noreply, State#state { starting_port = Port }};
 
 handle_cast({stop_sync, Pid}, State) ->
     Port = destroy_(),
