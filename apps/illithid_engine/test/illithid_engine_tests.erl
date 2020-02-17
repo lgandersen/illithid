@@ -4,7 +4,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 container_start() ->
+    application:set_env([{lager, [{colored, true}]}], [{persistent, true}]),
     lager:start(),
+    lager:set_loglevel(lager_console_backend, ?TEST_LOG_LEVEL),
     Image = ?BASE_IMAGE#image { created = erlang:timestamp() },
     Opts = ["mount.devfs",
             "ip4.addr=10.13.37.3",

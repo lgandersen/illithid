@@ -40,6 +40,6 @@
 -define(BASE_IMAGE, #image {id = base, tag = "base", layers = [?BASE_LAYER]}).
 
 
-
--define(LOG(Msg, Args), io:format(user, Msg, Args)).
+-define(TEST_LOG_LEVEL, info).
+-define(LOG(Msg, Args), lager:info(Msg, Args)).
 -define(LOG(Msg), ?LOG(Msg, [])).

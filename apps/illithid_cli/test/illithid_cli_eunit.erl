@@ -5,6 +5,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 initialize() ->
+    application:set_env([{lager, [{colored, true}]}], [{persistent, true}]),
+    lager:start(),
+    lager:set_loglevel(lager_console_backend, ?TEST_LOG_LEVEL),
     illithid_engine_zfs:clear_zroot(),
     %ok = application:start(illithid_engine),
     {ok, SupPid} = illithid_engine_sup:start_link(),

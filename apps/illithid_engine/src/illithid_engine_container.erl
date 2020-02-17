@@ -111,7 +111,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
-    lager:info("~p: Container shut down with exit-code: ~p", [Port, N]),
+    lager:info("container-~s: jail closed with exit-code: ~p", [Container#container.id, N]),
     #container { layer = #layer {path = Path}} = Container,
     umount_devfs(Path),
     NewState = case Caller of
@@ -125,8 +125,8 @@ handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Cal
     %%TODO shouldn't we just exit (normally) here?
     {noreply, NewState#state { closing_port = none }};
 
-handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo }) ->
-    lager:info("Message received from ~p: ~p", [Port, Msg]),
+handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
+    lager:debug("container#~s message received: ~p", [Container#container.id, Msg]),
     case RelayTo of
         none ->
             ok;
@@ -136,8 +136,8 @@ handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = Relay
     end,
     {noreply, State};
 
-handle_info(Info, State) ->
-    lager:warning("Unknow message received to jail manager: ~p", [Info]),
+handle_info(Info, #state { container = #container { id = Id }} = State) ->
+    lager:warning("container#~s message not understood: ~p", [Id, Info]),
     {noreply, State}.
 
 
@@ -163,6 +163,7 @@ receive_exit_status(Pid) ->
 
 
 run_(#container {
+        id         = Id,
         layer      = #layer { path = Path },
         command    = [Cmd | CmdArgs],
         parameters = Parameters }) ->
@@ -181,7 +182,7 @@ run_(#container {
                       {args, Args}
                       ]),
     DebugCmd = string:join([Executable | Args], " "),
-    lager:info("Creating jail:~s", [DebugCmd]),
+    lager:info("container#~s: ~s", [Id, DebugCmd]),
     Port.
 
 

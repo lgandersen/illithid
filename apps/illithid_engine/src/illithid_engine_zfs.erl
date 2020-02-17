@@ -15,7 +15,6 @@
 -include_lib("include/illithid.hrl").
 
 clear_zroot() ->
-    lager:info("Clearing zroot."),
     0 = destroy_force(?ZROOT),
     0 = create(?ZROOT),
     ok.
@@ -65,7 +64,7 @@ rename(Dataset, NewDataset) ->
 
 zfs(Args) ->
     Cmd = string:join(["zfs" | Args], " "),
-    lager:info("Executing ZFS-command: ~p", [Cmd]),
+    lager:info("~p: ~s", [?MODULE, Cmd]),
     Port = open_port({spawn_executable, "/sbin/zfs"}, [exit_status, {line, 1024}, {args, Args}]),
     receive
         {Port, {exit_status, N}} ->
