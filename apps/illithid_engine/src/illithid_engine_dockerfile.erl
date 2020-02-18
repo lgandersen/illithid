@@ -16,6 +16,9 @@ parse(FileRaw) when is_binary(FileRaw) ->
     lists:map(fun parse_/1, Tokens).
 
 
+parse_({user, UserBinary}) ->
+    {user, string:strip(binary:bin_to_list(UserBinary))};
+
 parse_({run, <<"[", _Rest/binary>> = JSONForm}) ->
     Cmd = decode_jsonform(JSONForm),
     {run, Cmd};
@@ -121,6 +124,7 @@ instructions_test_() ->
                                   fun test_run_instruction_/1,
                                   fun test_cmd_instruction_/1,
                                   fun test_copy_instruction/1,
+                                  fun test_user_instruction/1,
                                   fun test_expose_instruction/1]
      }.
 
@@ -159,4 +163,10 @@ test_copy_instruction(_) ->
     FileRaw2 = <<"# Testing\nFROM lol\nCOPY lol1 lol2 lol3">>,
     [?_assertEqual([{from, "lol"}, {copy, ["lol1", "lol2", "lol3"]}], parse(FileRaw)),
     ?_assertEqual([{from, "lol"}, {copy, ["lol1", "lol2", "lol3"]}], parse(FileRaw2))].
+
+test_user_instruction(_) ->
+    FileRaw = <<"# Testing\nFROM lol\nUSER testuser">>,
+    FileRaw2 = <<"# Testing\nFROM lol\nUSER  testuser  ">>,
+    [?_assertEqual([{from, "lol"}, {user, "testuser"}], parse(FileRaw)),
+    ?_assertEqual([{from, "lol"}, {user, "testuser"}], parse(FileRaw2))].
 -endif.

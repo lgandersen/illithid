@@ -32,6 +32,7 @@
           tag     = none,
           layers  = none,
           command = none,
+          user    = "root",
           created = none
          }).
 

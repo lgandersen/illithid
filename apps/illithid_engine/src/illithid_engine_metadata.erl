@@ -55,7 +55,7 @@ get_image(ImageId) ->
 
 
 list_images() ->
-    ImagesAll = mnesia:dirty_match_object({image, '_', '_', '_', '_', '_', '_'}),
+    ImagesAll = mnesia:dirty_match_object({image, '_', '_', '_', '_', '_', '_', '_'}),
     ImagesUnordered = lists:filter(fun(Image) ->
                                   case Image#image.id of
                                       base -> false;

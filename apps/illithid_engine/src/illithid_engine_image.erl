@@ -32,7 +32,8 @@
           instructions = none,
           context      = none,
           caller       = none,
-          image_record = none
+          image_record = none,
+          user         = "root"
          }).
 
 
@@ -102,12 +103,12 @@ proces_instructions(#build_state { instructions = [ {from, ImageId} | Rest ] } =
 
 proces_instructions(#build_state {
                        instructions = [ {run, Cmd} | Rest ],
-                       image_record = #image { layers = Layers } = Image
+                       image_record = #image { layers = Layers, user = User } = Image
                        } = State) ->
 
     {ok, Pid} = illithid_engine_container_pool:create(Image#image { command = Cmd}, []),
     #container { layer = #layer{ id = LayerId }} = illithid_engine_container:fetch(Pid),
-    {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid),
+    {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid, [{user, User}]),
     {ok, LayerUpd} = illithid_engine_layer:finalize_layer(LayerId),
 
     NewState = State#build_state {
@@ -130,6 +131,14 @@ proces_instructions(#build_state {
                                    layers = [ LayerUpd | Layers ]
                                   }},
     proces_instructions(NewState);
+
+proces_instructions(#build_state { instructions = [ {user, User} | Rest ], image_record = Image } = State) ->
+    NewState = State#build_state {
+                  instructions = Rest,
+                  image_record = Image#image { user = User }
+                 },
+    proces_instructions(NewState);
+
 
 proces_instructions(#build_state { instructions = [ {cmd, Args} | Rest ], image_record = Image } = State) ->
     NewState = State#build_state {

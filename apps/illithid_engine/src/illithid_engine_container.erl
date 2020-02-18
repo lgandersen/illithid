@@ -12,9 +12,8 @@
 %% API
 -export([start_link/2,
          fetch/1,
-         run/1,
-         run/2,
-         run_sync/1,
+         run/1, run/2,
+         run_sync/1, run_sync/2,
          stop_sync/1,
          umount_devfs/1]).
 
@@ -59,7 +58,11 @@ run(Pid) ->
 
 
 run_sync(Pid) ->
-    gen_server:cast(Pid, {run, [{relay_to, self()}]}),
+    run_sync(Pid, []).
+
+
+run_sync(Pid, Opts) ->
+    gen_server:cast(Pid, {run, Opts ++ [{relay_to, self()}]}),
     receive_exit_status(Pid).
 
 
@@ -85,7 +88,7 @@ init([Image, Opts]) ->
                    parameters = Opts
                   },
     illithid_engine_metadata:add_container(Container),
-    {ok, #state { container = Container }}.
+    {ok, #state { container = Container, image = Image }}.
 
 
 handle_call(fetch, _From, #state { container = Container } = State) ->
@@ -96,9 +99,11 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({run, Opts}, #state { container = #container { parameters = Param } = Container } = State) ->
+handle_cast({run, Opts}, #state { container = #container { parameters = Param } = Container,
+                                  image     = #image { user = DefaultUser }
+                                } = State) ->
     RelayTo = proplists:get_value(relay_to, Opts, none),
-    User = proplists:get_value(user, Opts, "root"),
+    User = proplists:get_value(user, Opts, DefaultUser),
     UserParam = "exec.jail_user=" ++ User,
     Port = run_(Container#container { parameters = [ UserParam | Param ]}),
     {noreply, State#state { starting_port = Port, relay_to = RelayTo }};

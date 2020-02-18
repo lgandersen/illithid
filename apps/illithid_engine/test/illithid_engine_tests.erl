@@ -25,6 +25,7 @@ container_stop([_, _, LayerPid]) ->
 container_test_() ->
      {foreach, fun container_start/0, fun container_stop/1, [
                                         fun create_container_async/1,
+                                        fun create_container_as_nonroot/1,
                                         fun create_container_sync/1,
                                         fun container_shutdown_sync/1
                                         ]
@@ -34,6 +35,15 @@ container_test_() ->
 create_container_async([Image, Opts, _]) ->
     {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
     ?_assertEqual(ok, illithid_engine_container:run(Pid)).
+
+
+create_container_as_nonroot([Image, Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/usr/bin/id"], user = "ntpd" }, Opts),
+    ok = illithid_engine_container:run(Pid, [{relay_to, self()}]),
+    receive
+        Msg ->
+            ?_assertEqual({container_msg, {Pid, {data, {eol, "uid=123(ntpd) gid=123(ntpd) groups=123(ntpd)"}}}}, Msg)
+    end.
 
 
 create_container_sync([Image, Opts, _]) ->
