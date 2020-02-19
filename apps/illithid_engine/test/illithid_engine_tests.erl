@@ -7,17 +7,19 @@ container_start() ->
     application:set_env([{lager, [{colored, true}]}], [{persistent, true}]),
     lager:start(),
     lager:set_loglevel(lager_console_backend, ?TEST_LOG_LEVEL),
-    Image = ?BASE_IMAGE#image { created = erlang:timestamp() },
-    Opts = ["mount.devfs",
-            "ip4.addr=10.13.37.3",
-            "exec.stop=\"/bin/sh /etc/rc.shutdown\""
-            ],
+    Opts = [
+            {image, ?BASE_IMAGE#image { created = erlang:timestamp()}},
+            {jail_param, ["mount.devfs",
+                          "ip4.addr=10.13.37.3",
+                          "exec.stop=\"/bin/sh /etc/rc.shutdown\""
+                         ]}
+           ],
     ok = illithid_engine_zfs:clear_zroot(),
     {ok, LayerPid} = illithid_engine_layer:start_link(),
-    [Image, Opts, LayerPid].
+    [Opts, LayerPid].
 
 
-container_stop([_, _, LayerPid]) ->
+container_stop([_, LayerPid]) ->
     gen_server:stop(LayerPid),
     ok.
 
@@ -32,27 +34,28 @@ container_test_() ->
      }.
 
 
-create_container_async([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
+create_container_async([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual(ok, illithid_engine_container:run(Pid)).
 
 
-create_container_as_nonroot([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/usr/bin/id"], user = "ntpd" }, Opts),
-    ok = illithid_engine_container:run(Pid, [{relay_to, self()}]),
+create_container_as_nonroot([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
+    illithid_engine_container:attach(Pid),
+    ok = illithid_engine_container:run(Pid),
     receive
         Msg ->
             ?_assertEqual({container_msg, {Pid, {data, {eol, "uid=123(ntpd) gid=123(ntpd) groups=123(ntpd)"}}}}, Msg)
     end.
 
 
-create_container_sync([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/ls", "/"] }, Opts),
+create_container_sync([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)).
 
 
-container_shutdown_sync([Image, Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link(Image#image { command = ["/bin/sh", "/etc/rc"] }, Opts),
+container_shutdown_sync([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
     [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)),
     {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_sync(Pid))}].
 

@@ -5,7 +5,7 @@
 
 %% API.
 -export([start_link/0,
-         create/2,
+         create/1,
          stop/1
         ]).
 
@@ -28,12 +28,13 @@ stop(Pid) ->
     supervisor:terminate_child({local, ?MODULE}, Pid).
 
 
--spec create(Image :: #image{}, Opts :: [term()]) -> {ok, Pid} | {error, Reason}
+-spec create(Opts) -> {ok, Pid} | {error, Reason}
     when
+        Opts   :: [term()],
         Pid    :: pid(),
         Reason :: term().
-create(Image, Opts) ->
-    supervisor:start_child(?SERVER, [Image, Opts]).
+create(Opts) ->
+    supervisor:start_child(?SERVER, [Opts]).
 
 
 %% @private

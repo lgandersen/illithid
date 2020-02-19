@@ -10,10 +10,11 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/2,
+-export([start_link/1,
          fetch/1,
-         run/1, run/2,
-         run_sync/1, run_sync/2,
+         attach/1,
+         run/1,
+         run_sync/1,
          stop_sync/1,
          umount_devfs/1]).
 
@@ -41,55 +42,61 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link(Image, Opts) ->
-    gen_server:start_link(?MODULE, [Image, Opts], []).
+start_link(Opts) ->
+    gen_server:start_link(?MODULE, [Opts], []).
 
 
 fetch(Pid) ->
     gen_server:call(Pid, fetch).
 
 
-run(Pid, Opts) ->
-    gen_server:cast(Pid, {run, Opts}).
+attach(Pid) ->
+    gen_server:call(Pid, {attach, self()}).
 
 
 run(Pid) ->
-    gen_server:cast(Pid, {run, []}).
+    gen_server:cast(Pid, run).
 
 
 run_sync(Pid) ->
-    run_sync(Pid, []).
-
-
-run_sync(Pid, Opts) ->
-    gen_server:cast(Pid, {run, Opts ++ [{relay_to, self()}]}),
+    ok = attach(Pid),
+    gen_server:cast(Pid, run),
     receive_exit_status(Pid).
 
 
 stop_sync(Pid) ->
+    ok = attach(Pid),
     gen_server:cast(Pid, {stop_sync, self()}),
     receive
         {ok, {exit_status, N}} ->
             {ok, {exit_status, N}}
     end.
 
-
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([Image, Opts]) ->
-    #image { command = Cmd } = Image,
+init([Opts]) ->
+    #image {user    = DefaultUser,
+            command = DefaultCmd } = Image = proplists:get_value(image, Opts, ?BASE_IMAGE),
     {ok, Layer} = illithid_engine_layer:new(Image),
+    Cmd = proplists:get_value(cmd, Opts, DefaultCmd),
+    User = proplists:get_value(user, Opts, DefaultUser),
+    RelayTo = proplists:get_value(relay_to, Opts, none),
+    JailParam = proplists:get_value(jail_param, Opts, []),
+
     Container = #container {
                    id         = illithid_engine_util:uuid(),
                    pid        = self(),
                    command    = Cmd,
                    layer      = Layer,
-                   parameters = Opts
+                   parameters = ["exec.jail_user=" ++ User | JailParam]
                   },
     illithid_engine_metadata:add_container(Container),
-    {ok, #state { container = Container, image = Image }}.
+    {ok, #state { container = Container, relay_to = RelayTo, image = Image }}.
 
+
+handle_call({attach, Pid}, _From, State) ->
+    {reply, ok, State#state { relay_to = Pid }};
 
 handle_call(fetch, _From, #state { container = Container } = State) ->
     {reply, Container, State};
@@ -99,14 +106,9 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({run, Opts}, #state { container = #container { parameters = Param } = Container,
-                                  image     = #image { user = DefaultUser }
-                                } = State) ->
-    RelayTo = proplists:get_value(relay_to, Opts, none),
-    User = proplists:get_value(user, Opts, DefaultUser),
-    UserParam = "exec.jail_user=" ++ User,
-    Port = run_(Container#container { parameters = [ UserParam | Param ]}),
-    {noreply, State#state { starting_port = Port, relay_to = RelayTo }};
+handle_cast(run, #state { container = Container} = State) ->
+    Port = run_(Container),
+    {noreply, State#state { starting_port = Port}};
 
 handle_cast({stop_sync, Pid}, State) ->
     Port = destroy_(),
@@ -172,7 +174,6 @@ run_(#container {
         layer      = #layer { path = Path },
         command    = [Cmd | CmdArgs],
         parameters = Parameters }) ->
-% $ jail -c path=/data/jail/testjail mount.devfs host.hostname=testhostname ip4.addr=192.0.2.100 command=/bin/sh
     Name = jail_name_from_pid(),
     Executable = "/usr/sbin/jail",
     Args = ["-c",
