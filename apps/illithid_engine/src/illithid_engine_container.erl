@@ -2,7 +2,7 @@
 %%% @author lga
 %%% @copyright (C) 2019, lga
 %%% @doc
-%%% This gen_server manages jails: Creates, runs, destroys and monitors jails.
+%%% This gen_server manages jails: Creates, starts, destroys and monitors jails.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(illithid_engine_container).
@@ -10,12 +10,12 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1,
-         fetch/1,
+-export([create/1,
+         metadata/1,
          attach/1,
-         run/1,
-         run_sync/1,
-         stop_sync/1,
+         start/1,
+         start_await/1,
+         stop_await/1,
          umount_devfs/1]).
 
 %% gen_server callbacks
@@ -31,46 +31,47 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-          caller = none,
-          relay_to = none,
-          image = none,
-          container = none,
-          closing_port = none,
+          caller        = none,
+          relay_to      = none,
+          image         = none,
+          container     = none,
+          closing_port  = none,
           starting_port = none
          }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link(Opts) ->
+create(Opts) ->
     gen_server:start_link(?MODULE, [Opts], []).
-
-
-fetch(Pid) ->
-    gen_server:call(Pid, fetch).
 
 
 attach(Pid) ->
     gen_server:call(Pid, {attach, self()}).
 
 
-run(Pid) ->
-    gen_server:cast(Pid, run).
+start(Pid) ->
+    gen_server:cast(Pid, start).
 
 
-run_sync(Pid) ->
+start_await(Pid) ->
     ok = attach(Pid),
-    gen_server:cast(Pid, run),
+    gen_server:cast(Pid, start),
     receive_exit_status(Pid).
 
 
-stop_sync(Pid) ->
+stop_await(Pid) ->
     ok = attach(Pid),
-    gen_server:cast(Pid, {stop_sync, self()}),
+    gen_server:cast(Pid, {stop_await, self()}),
     receive
         {ok, {exit_status, N}} ->
             {ok, {exit_status, N}}
     end.
+
+
+metadata(Pid) ->
+    gen_server:call(Pid, metadata).
+
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -98,7 +99,7 @@ init([Opts]) ->
 handle_call({attach, Pid}, _From, State) ->
     {reply, ok, State#state { relay_to = Pid }};
 
-handle_call(fetch, _From, #state { container = Container } = State) ->
+handle_call(metadata, _From, #state { container = Container } = State) ->
     {reply, Container, State};
 
 handle_call(_Request, _From, State) ->
@@ -106,11 +107,11 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast(run, #state { container = Container} = State) ->
-    Port = run_(Container),
+handle_cast(start, #state { container = Container} = State) ->
+    Port = start_(Container),
     {noreply, State#state { starting_port = Port}};
 
-handle_cast({stop_sync, Pid}, State) ->
+handle_cast({stop_await, Pid}, State) ->
     Port = destroy_(),
     {noreply, State#state { closing_port = Port, caller = Pid }};
 
@@ -169,7 +170,7 @@ receive_exit_status(Pid) ->
     end.
 
 
-run_(#container {
+start_(#container {
         id         = Id,
         layer      = #layer { path = Path },
         command    = [Cmd | CmdArgs],

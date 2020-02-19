@@ -111,8 +111,8 @@ proces_instructions(#build_state {
             {user, User}
            ],
     {ok, Pid} = illithid_engine_container_pool:create(Opts),
-    #container { layer = #layer{ id = LayerId }} = illithid_engine_container:fetch(Pid),
-    {ok, {exit_status, _N}} = illithid_engine_container:run_sync(Pid),
+    #container { layer = #layer{ id = LayerId }} = illithid_engine_container:metadata(Pid),
+    {ok, {exit_status, _N}} = illithid_engine_container:start_await(Pid),
     {ok, LayerUpd} = illithid_engine_layer:finalize_layer(LayerId),
 
     NewState = State#build_state {

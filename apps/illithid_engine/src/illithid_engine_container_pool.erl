@@ -47,7 +47,7 @@ init([]) ->
      },
     ChildSpec = #{
       id => illithid_engine_container,
-      start => {illithid_engine_container, start_link, []},
+      start => {illithid_engine_container, create, []},
       restart => temporary,
       shutdown => 5000,
       type => worker,

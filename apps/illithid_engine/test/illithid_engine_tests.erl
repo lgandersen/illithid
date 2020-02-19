@@ -28,36 +28,36 @@ container_test_() ->
      {foreach, fun container_start/0, fun container_stop/1, [
                                         fun create_container_async/1,
                                         fun create_container_as_nonroot/1,
-                                        fun create_container_sync/1,
-                                        fun container_shutdown_sync/1
+                                        fun create_container_await/1,
+                                        fun container_shutdown_await/1
                                         ]
      }.
 
 
 create_container_async([Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/ls", "/"]} | Opts]),
-    ?_assertEqual(ok, illithid_engine_container:run(Pid)).
+    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
+    ?_assertEqual(ok, illithid_engine_container:start(Pid)).
 
 
 create_container_as_nonroot([Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
+    {ok, Pid} = illithid_engine_container:create([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
     illithid_engine_container:attach(Pid),
-    ok = illithid_engine_container:run(Pid),
+    ok = illithid_engine_container:start(Pid),
     receive
         Msg ->
             ?_assertEqual({container_msg, {Pid, {data, {eol, "uid=123(ntpd) gid=123(ntpd) groups=123(ntpd)"}}}}, Msg)
     end.
 
 
-create_container_sync([Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/ls", "/"]} | Opts]),
-    ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)).
+create_container_await([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
+    ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)).
 
 
-container_shutdown_sync([Opts, _]) ->
-    {ok, Pid} = illithid_engine_container:start_link([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
-    [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:run_sync(Pid)),
-    {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_sync(Pid))}].
+container_shutdown_await([Opts, _]) ->
+    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
+    [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)),
+    {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_await(Pid))}].
 
 
 image_building_start() ->

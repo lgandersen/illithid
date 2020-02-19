@@ -112,7 +112,7 @@ handle_command({run, ImageIdentifier, Command}, _Socket) ->
     end,
     {ok, Pid} = illithid_engine_container_pool:create([ImgOption]),
     illithid_engine_container:attach(Pid),
-    illithid_engine_container:run(Pid);
+    illithid_engine_container:start(Pid);
 
 handle_command(list_images, Socket) ->
     Images = illithid_engine_metadata:list_images(),
