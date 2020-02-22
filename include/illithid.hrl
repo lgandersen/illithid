@@ -4,6 +4,7 @@
 -define(BASE_LAYER_PATH, "/zroot/mindflayer_basejail").
 
 -define(API_SOCKET, "/var/run/illithid.sock").
+-define(IP_RANGE, {{10,13,37,1}, {10,13,37,255}}).
 
 -record(layer, {
          %%% When 'id' i set to 'base' it refers to dataset ?BASE_LAYER (is referenced in Dockerfiles with "FROM scratch")
@@ -22,6 +23,7 @@
           pid          = none, % Erlang proces id of the gen_server
           command      = none,
           layer        = none,
+          ip           = none,
           parameters   = []
           }).
 

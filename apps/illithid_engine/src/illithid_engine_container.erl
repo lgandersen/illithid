@@ -87,6 +87,8 @@ init([Opts]) ->
 
     Container = #container {
                    id         = illithid_engine_util:uuid(),
+                   name       = illithid_engine_name_generator:new(),
+                   ip         = illithid_engine_network:new_ip(),
                    pid        = self(),
                    command    = Cmd,
                    layer      = Layer,
@@ -111,15 +113,15 @@ handle_cast(start, #state { container = Container} = State) ->
     Port = start_(Container),
     {noreply, State#state { starting_port = Port}};
 
-handle_cast({stop_await, Pid}, State) ->
-    Port = destroy_(),
+handle_cast({stop_await, Pid}, #state { container = Container} = State) ->
+    Port = destroy_(Container),
     {noreply, State#state { closing_port = Port, caller = Pid }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
-    lager:info("container-~s: jail closed with exit-code: ~p", [Container#container.id, N]),
+    lager:info("container-~s jail closed with exit-code: ~p", [Container#container.id, N]),
     #container { layer = #layer {path = Path}} = Container,
     umount_devfs(Path),
     NewState = case Caller of
@@ -128,6 +130,7 @@ handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Cal
 
         _Pid ->
             Caller ! {ok, {exit_status, N}},
+            illithid_engine_network:remove_ip(Container#container.ip),
             State#state { caller = none }
     end,
     %%TODO shouldn't we just exit (normally) here?
@@ -174,12 +177,14 @@ start_(#container {
         id         = Id,
         layer      = #layer { path = Path },
         command    = [Cmd | CmdArgs],
+        ip         = Ip,
         parameters = Parameters }) ->
-    Name = jail_name_from_pid(),
+
     Executable = "/usr/sbin/jail",
     Args = ["-c",
             "path=" ++ Path,
-            "name=" ++ Name
+            "name=" ++ Id,
+            "ip4.addr=" ++ inet:ntoa(Ip)
            ] ++ Parameters ++ [
             "command=" ++ Cmd
            ] ++ CmdArgs,
@@ -193,10 +198,9 @@ start_(#container {
     Port.
 
 
-destroy_() ->
+destroy_(#container { id = Id }) ->
     Executable = "/usr/sbin/jail",
-    Name = jail_name_from_pid(),
-    Args = ["-r", Name],
+    Args = ["-r", Id],
     Port = open_port({spawn_executable, Executable},
                      [exit_status,
                       {line, 1024},
@@ -204,17 +208,6 @@ destroy_() ->
                       ]),
     lager:info("~p: Shutting down jail: ~p", [Port, [Executable | Args]]),
     Port.
-
-
-jail_name_from_pid() ->
-    binary:bin_to_list(
-      binary:replace(
-        binary:replace(
-          binary:replace(
-            binary:list_to_bin(pid_to_list(self())),
-            <<"<">>, <<"mf_jail_">>),
-          <<">">>, <<"">>),
-        <<".">>, <<"_">>, [global])).
 
 
 umount_devfs(Path) ->

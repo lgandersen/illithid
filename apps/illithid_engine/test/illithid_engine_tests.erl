@@ -10,17 +10,18 @@ container_start() ->
     Opts = [
             {image, ?BASE_IMAGE#image { created = erlang:timestamp()}},
             {jail_param, ["mount.devfs",
-                          "ip4.addr=10.13.37.3",
                           "exec.stop=\"/bin/sh /etc/rc.shutdown\""
                          ]}
            ],
     ok = illithid_engine_zfs:clear_zroot(),
-    {ok, LayerPid} = illithid_engine_layer:start_link(),
-    [Opts, LayerPid].
+    {ok, _} = illithid_engine_layer:start_link(),
+    {ok, _} = illithid_engine_network:start_link(),
+    Opts.
 
 
-container_stop([_, LayerPid]) ->
-    gen_server:stop(LayerPid),
+container_stop(_) ->
+    gen_server:stop(illithid_engine_layer),
+    gen_server:stop(illithid_engine_network),
     ok.
 
 
@@ -34,12 +35,12 @@ container_test_() ->
      }.
 
 
-create_container_async([Opts, _]) ->
+create_container_async(Opts) ->
     {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual(ok, illithid_engine_container:start(Pid)).
 
 
-create_container_as_nonroot([Opts, _]) ->
+create_container_as_nonroot(Opts) ->
     {ok, Pid} = illithid_engine_container:create([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
     illithid_engine_container:attach(Pid),
     ok = illithid_engine_container:start(Pid),
@@ -49,12 +50,12 @@ create_container_as_nonroot([Opts, _]) ->
     end.
 
 
-create_container_await([Opts, _]) ->
+create_container_await(Opts) ->
     {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)).
 
 
-container_shutdown_await([Opts, _]) ->
+container_shutdown_await(Opts) ->
     {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
     [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)),
     {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_await(Pid))}].
