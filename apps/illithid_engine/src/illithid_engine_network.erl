@@ -57,6 +57,9 @@ init([]) ->
               ip_range = ?IP_RANGE,
               used_ips = sets:new()
               },
+    exec_cmd("ifconfig ~s destroy", [?INET_IF]),
+    exec_cmd("ifconfig lo create name ~s", [?INET_IF]),
+    process_flag(trap_exit, true),
     {ok, State}.
 
 
@@ -82,6 +85,8 @@ handle_info(_Info, State) ->
 
 
 terminate(_Reason, _State) ->
+    log("terminating illithid_engine_network"),
+    exec_cmd("ifconfig ~s destroy", [?INET_IF]),
     ok.
 
 
@@ -110,7 +115,9 @@ generate_new_ip_(IpN, EndIpN, UsedIps) ->
 
         false ->
             NewUsedIps = sets:add_element(Ip, UsedIps),
-            {Ip, NewUsedIps}
+            IpString = inet:ntoa(Ip),
+            [] = exec_cmd("ifconfig ~s alias ~s/32", [?INET_IF, IpString]),
+            {IpString, NewUsedIps}
     end.
 
 -define(POW(N), erlang:round(math:pow(256, N))).
@@ -132,41 +139,56 @@ int2ip_(N, Order, Prev) ->
     int2ip_(N_next, Order - 1, [X | Prev]).
 
 
-
-remove_ip(Ip, #state { used_ips = UsedIps } = State) ->
+remove_ip(IpString, #state { used_ips = UsedIps } = State) ->
+    {ok, Ip} = inet:parse_address(IpString),
     NewUsedIp = sets:del_element(Ip, UsedIps),
+    [] = exec_cmd("ifconfig ~s -alias ~s", [?INET_IF, IpString]),
     State#state { used_ips = NewUsedIp }.
 
+
+exec_cmd(CmdTemplate, Args) ->
+    Cmd = io_lib:format(CmdTemplate, Args),
+    log(Cmd),
+    os:cmd(Cmd).
+
+
+log(Cmd) ->
+    lager:info(erlang:atom_to_list(?MODULE) ++ ": " ++ Cmd).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 simple_generate_new_ip_test() ->
+    lager:start(),
+    {ok, _Pid} = illithid_engine_network:start_link(),
     State = #state{ ip_range = {
                       {10, 13, 37, 1}, {10, 13, 37, 3}
                     },
                     used_ips = sets:new()
                   },
     {Ip1, NewState1} = generate_new_ip(State),
-    ?assertEqual({10, 13, 37, 1}, Ip1),
+    ?assertEqual("10.13.37.1", Ip1),
     {Ip2, NewState2} = generate_new_ip(NewState1),
-    ?assertEqual({10, 13, 37, 2}, Ip2),
+    ?assertEqual("10.13.37.2", Ip2),
     {Ip3, NewState3} = generate_new_ip(NewState2),
-    ?assertEqual({10, 13, 37, 3}, Ip3),
-    {Ip4, NewState4} = generate_new_ip(NewState3),
-    ?assertEqual(out_of_ips, Ip4).
+    ?assertEqual("10.13.37.3", Ip3),
+    {Ip4, _NewState4} = generate_new_ip(NewState3),
+    ?assertEqual(out_of_ips, Ip4),
+    gen_server:stop(illithid_engine_network).
 
 advanced_generate_new_ip_test() ->
+    {ok, _Pid} = illithid_engine_network:start_link(),
     State = #state{ ip_range = {
                       {10, 13, 37, 254}, {10, 13, 38, 0}
                     },
                     used_ips = sets:new()
                   },
     {Ip1, NewState1} = generate_new_ip(State),
-    ?assertEqual({10, 13, 37, 254}, Ip1),
+    ?assertEqual("10.13.37.254", Ip1),
     {Ip2, NewState2} = generate_new_ip(NewState1),
-    ?assertEqual({10, 13, 37, 255}, Ip2),
+    ?assertEqual("10.13.37.255", Ip2),
     {Ip3, NewState3} = generate_new_ip(NewState2),
-    ?assertEqual({10, 13, 38, 0}, Ip3),
-    {Ip4, NewState4} = generate_new_ip(NewState3),
-    ?assertEqual(out_of_ips, Ip4).
+    ?assertEqual("10.13.38.0", Ip3),
+    {Ip4, _NewState4} = generate_new_ip(NewState3),
+    ?assertEqual(out_of_ips, Ip4),
+    gen_server:stop(illithid_engine_network).
 -endif.

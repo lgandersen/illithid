@@ -5,6 +5,7 @@
 
 -define(API_SOCKET, "/var/run/illithid.sock").
 -define(IP_RANGE, {{10,13,37,1}, {10,13,37,255}}).
+-define(INET_IF, "illithid0").
 
 -record(layer, {
          %%% When 'id' i set to 'base' it refers to dataset ?BASE_LAYER (is referenced in Dockerfiles with "FROM scratch")

@@ -57,6 +57,7 @@ create_container_await(Opts) ->
 
 container_shutdown_await(Opts) ->
     {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
+    unlink(Pid),
     [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)),
     {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_await(Pid))}].
 

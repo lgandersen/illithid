@@ -121,7 +121,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
-    lager:info("container-~s jail closed with exit-code: ~p", [Container#container.id, N]),
+    lager:info("container-~s jail was closed with exit-code: ~p", [Container#container.id, N]),
     #container { layer = #layer {path = Path}} = Container,
     umount_devfs(Path),
     NewState = case Caller of
@@ -130,11 +130,10 @@ handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Cal
 
         _Pid ->
             Caller ! {ok, {exit_status, N}},
-            illithid_engine_network:remove_ip(Container#container.ip),
             State#state { caller = none }
     end,
-    %%TODO shouldn't we just exit (normally) here?
-    {noreply, NewState#state { closing_port = none }};
+    illithid_engine_network:remove_ip(Container#container.ip),
+    {stop, {shutdown, jail_stopped}, NewState#state { closing_port = none }};
 
 handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
     lager:debug("container#~s message received: ~p", [Container#container.id, Msg]),
@@ -184,7 +183,7 @@ start_(#container {
     Args = ["-c",
             "path=" ++ Path,
             "name=" ++ Id,
-            "ip4.addr=" ++ inet:ntoa(Ip)
+            "ip4.addr=" ++ Ip
            ] ++ Parameters ++ [
             "command=" ++ Cmd
            ] ++ CmdArgs,
