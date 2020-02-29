@@ -195,10 +195,10 @@ add_and_get_image_test() ->
 
 get_ordered_images_test() ->
     Images = list_images(),
-    ?assertMatch([Image, #image{ tag = "oldest"}], Images).
+    ?assertMatch([_Image, #image{ tag = "oldest"}], Images).
 
 
-reset_tag_if_new_with_same_is_inserted() ->
+reset_tag_if_new_with_same_is_inserted_test() ->
     Image = #image {
                id      = "originalimage",
                name    = "testing",

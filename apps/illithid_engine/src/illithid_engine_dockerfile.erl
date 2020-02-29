@@ -129,14 +129,14 @@ instructions_test_() ->
      }.
 
 test_general_tokenization(_) ->
-    [?_assertMatch(_ParsedTokens, parse("./apps/illithid_engine/test/eunit_data/Dockerfile"))].
+    [?_assertMatch([_All|_Tokens], parse("./apps/illithid_engine/test/eunit_data/Dockerfile"))].
 
 
 test_from_instruction(_) ->
     FileRaw1 = <<"# Testing\nFROM lol\n# One more comment">>,
     FileRaw2 = <<"# Testing\nFROM lol AS maxlol\n# One more comment">>,
-    ?_assertEqual([{from, "lol"}], parse(FileRaw1)),
-    ?_assertEqual([{from, "lol", "maxlol"}], parse(FileRaw2)).
+    [?_assertEqual([{from, "lol"}], parse(FileRaw1)),
+    ?_assertEqual([{from, "lol", "maxlol"}], parse(FileRaw2))].
 
 
 test_run_instruction_(_) ->
