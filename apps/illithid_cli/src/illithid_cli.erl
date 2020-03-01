@@ -5,6 +5,9 @@
 -export([main_/1]).
 -endif.
 
+-define(CREATE_SHORTCUT(SHORTCUT, ORIGIN), main_(SHORTCUT) -> main_(ORIGIN)).
+-define(CREATE_COMMAND(Input), main_(Input) -> illithid_cli_engine_client:command(Input), ok).
+
 
 -include_lib("include/illithid.hrl").
 
@@ -15,49 +18,28 @@ main(Cmd) ->
     main_(Cmd),
     relay_messages().
 
-main_(["images"]) ->
-    illithid_cli_engine_client:command(list_images),
-    ok;
 
-main_(["clear", "all"]) ->
-    illithid_cli_engine_client:command(clear_zroot),
-    ok;
+?CREATE_COMMAND(["image", "build", "-t", NameTagRaw, Path]);
+?CREATE_COMMAND(["image", "ls"]);
+?CREATE_COMMAND(["container", "run", Image | Command]);
+?CREATE_COMMAND(["clear", "zroot"]);
 
-main_(["build", Path]) ->
-    illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", {none, none}}),
-    ok;
 
-main_(["build", "-t", NameTagRaw, Path]) ->
-    %%TODO NameTag should be probably be sanity-checked using a regex
-    {_Name, _Tag} = NameTag = parse_nametag(NameTagRaw),
-    illithid_cli_engine_client:command({build, Path ++ "/Dockerfile", NameTag}),
-    ok;
-
-main_(["run", Image]) ->
-    illithid_cli_engine_client:command({run, Image, none}),
-    ok;
-
-main_(["run", Image | Command]) ->
-    illithid_cli_engine_client:command({run, Image, Command}),
-    ok;
-
+?CREATE_SHORTCUT(
+   ["run", Image | Command],
+   ["container", "run", Image | Command]);
+?CREATE_SHORTCUT(
+   ["images"],
+   ["image", "ls"]);
+?CREATE_SHORTCUT(
+   ["build", "-t", NameTagRaw, Path],
+   ["image", "build", "-t", NameTagRaw, Path]);
+?CREATE_SHORTCUT(
+   ["build", Path],
+   ["build", "-t", "", Path]);
 
 main_(Args) ->
     io:format("Unkown command: ~p~n", [Args]).
-
-
-parse_nametag(NameTag) ->
-    case string:split(NameTag, ":") of
-        [Name,Tag] ->
-            {Name, Tag};
-
-        [_, _ | _] ->
-            io:format("Unable to parse '-t <name>:<tag>' input.");
-
-        Name ->
-            {Name, "latest"}
-
-    end.
 
 
 relay_messages() ->

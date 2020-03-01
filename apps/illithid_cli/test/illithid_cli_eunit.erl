@@ -39,7 +39,7 @@ instructions_test_() ->
 
 test_clear_zroot(_) ->
     0 = illithid_engine_zfs:create(?ZROOT("test_cli_clear_all")),
-    illithid_cli:main_(["clear", "all"]),
+    illithid_cli:main_(["clear", "zroot"]),
     [ZRootCleared] = receive_messages("test-clear-zroot"),
     RCode = illithid_engine_zfs:create(?ZROOT("test_cli_clear_all")),
     [?_assertEqual(

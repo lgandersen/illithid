@@ -121,36 +121,36 @@ decode_buffer(Buffer, Cmd, Socket) ->
 
         Reply ->
             BufferUsed = size(erlang:term_to_binary(Reply)),
-            handle_reply(Cmd, Reply, Socket),
+            handle_reply(Cmd, Reply),
             NewBuffer = binary:part(Buffer, BufferUsed, size(Buffer) - BufferUsed),
             decode_buffer(NewBuffer, Cmd, Socket)
     end.
 
 
-handle_reply(clear_zroot, ok, _Socket) ->
+handle_reply(["clear", "zroot"], ok) ->
     to_cli(?ZROOT_CLEARED),
     done();
 
-handle_reply(list_images, Images, _Socket) ->
+handle_reply(["image", "ls"], Images) ->
     to_cli(?LIST_IMAGES_HEADER),
     print_images(Images);
 
-handle_reply({build, Path, _NameTag}, {ok, Image}, _Socket) ->
+handle_reply(["image", "build", "-t", _NameTagRaw, Path], {ok, Image}) ->
     to_cli("Succesfully built image from ~p~n", [Path]),
     to_cli("Image id: ~s~n", [Image#image.id]),
     done();
 
-handle_reply({run, _ImageId, _Command}, {data, {eol, Line}} ,_) ->
+handle_reply(["container", "run", _ImageId | _Command], {data, {eol, Line}}) ->
     to_cli(Line ++ "\n");
 
-handle_reply({run, _ImageId, _Command}, {exit_status, N} ,_) ->
+handle_reply(["container", "run", _ImageId | _Command], {exit_status, N}) ->
     to_cli("Container exited with status ~p~n", [N]),
     done();
 
-handle_reply({run, _ImageId, _Command}, Reply ,_) ->
+handle_reply(["container", "run", _ImageId | _Command], Reply) ->
     io:format(user, "Unkown command: ~p~n", [Reply]);
 
-handle_reply(_Request, Reply,_) ->
+handle_reply(_Request, Reply) ->
     io:format(user, "Reply not understood: ~p~n", [Reply]),
     Reply.
 

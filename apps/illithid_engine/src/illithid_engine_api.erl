@@ -101,10 +101,11 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
-handle_command({run, ImageIdentifier, Command}, _Socket) ->
+
+handle_command(["container", "run", ImageIdentifier | Command], _Socket) ->
     Image = illithid_engine_metadata:get_image(ImageIdentifier),
     ImgOption = case Command of
-        none ->
+        [] ->
             {image, Image};
 
         [_Cmd|_Args] ->
@@ -114,17 +115,19 @@ handle_command({run, ImageIdentifier, Command}, _Socket) ->
     illithid_engine_container:attach(Pid),
     illithid_engine_container:start(Pid);
 
-handle_command(list_images, Socket) ->
-    Images = illithid_engine_metadata:list_images(),
-    send_to_cli(Images, Socket);
-
-handle_command(clear_zroot, Socket) ->
+handle_command(["clear", "zroot"], Socket) ->
     ok = illithid_engine_zfs:clear_zroot(),
     send_to_cli(ok, Socket);
 
-handle_command({build, Path, {Name, Tag}}, Socket) ->
-    Instructions = illithid_engine_dockerfile:parse(Path),
-    {ok, Image} = illithid_engine_image:create_image(Instructions, Path),
+handle_command(["image", "ls"], Socket) ->
+    Images = illithid_engine_metadata:list_images(),
+    send_to_cli(Images, Socket);
+
+handle_command(["image", "build", "-t", NameTagRaw, Path], Socket) ->
+    DockerFilePath = Path ++ "/Dockerfile",
+    {Name, Tag} = parse_nametag(NameTagRaw),
+    Instructions = illithid_engine_dockerfile:parse(DockerFilePath),
+    {ok, Image} = illithid_engine_image:create_image(Instructions, DockerFilePath),
     illithid_engine_metadata:add_image(Image#image { name = Name, tag = Tag }),
     send_to_cli({ok, Image}, Socket);
 
@@ -132,10 +135,29 @@ handle_command(UnkownCommand, _Socket) ->
     lager:warning("Command ~p not understood.", [UnkownCommand]).
 
 
+parse_nametag("") ->
+    {none, none};
+
+parse_nametag(NameTag) ->
+    case string:split(NameTag, ":") of
+        [Name,Tag] ->
+            {Name, Tag};
+
+        [_, _ | _] ->
+            %%TODO Move this to cli-output
+            io:format("Unable to parse '-t <name>:<tag>' input.");
+
+        Name ->
+            {Name, "latest"}
+
+    end.
+
+
 send_to_cli(Term, Socket) ->
     TermBin = erlang:term_to_binary(Term),
     ok = gen_tcp:send(Socket, TermBin),
     ok.
+
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
