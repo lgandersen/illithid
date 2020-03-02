@@ -19,6 +19,7 @@
          get_image/1,
          list_images/0,
          add_container/1,
+         list_containers/0,
          clear_all/0]).
 
 %% gen_server callbacks
@@ -43,6 +44,15 @@ start_link() ->
 
 add_container(Container) ->
     mnesia:transaction(fun() -> mnesia:write(Container) end).
+
+
+list_containers() ->
+    Images = mnesia:dirty_match_object({container, '_', '_', '_', '_', '_', '_', '_', '_', '_'}),
+    ImagesOrdered = lists:sort(
+               fun(#container { created = A }, #container { created = B }) ->
+                       A =< B
+               end, Images),
+    ImagesOrdered.
 
 
 add_image(Image) ->
@@ -169,8 +179,17 @@ starting_mnesia_test() ->
 
 
 add_container_test() ->
-    Container = #container { id = "test_id", name = "container for testing"},
+    Container = #container { id = "1337", name = "testing-1", created = erlang:timestamp()},
     ?assertEqual({atomic, ok}, add_container(Container)).
+
+
+list_containers_test() ->
+    add_container(#container { id = "1338", name = "testing-2", created = erlang:timestamp()}),
+    add_container(#container { id = "1339", name = "testing-3", created = erlang:timestamp()}),
+    Containers = list_containers(),
+    ?assertMatch([#container { id = "1337"},
+                  #container { id = "1338"},
+                  #container { id = "1339"}], Containers).
 
 
 add_and_get_image_test() ->
@@ -193,7 +212,7 @@ add_and_get_image_test() ->
     ?assertEqual(Image2, get_image("test")).
 
 
-get_ordered_images_test() ->
+list_images_test() ->
     Images = list_images(),
     ?assertMatch([_Image, #image{ tag = "oldest"}], Images).
 

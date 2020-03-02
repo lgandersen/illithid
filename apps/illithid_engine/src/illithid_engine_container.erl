@@ -92,7 +92,8 @@ init([Opts]) ->
                    pid        = self(),
                    command    = Cmd,
                    layer      = Layer,
-                   parameters = ["exec.jail_user=" ++ User | JailParam]
+                   parameters = ["exec.jail_user=" ++ User | JailParam],
+                   created    = erlang:timestamp()
                   },
     illithid_engine_metadata:add_container(Container),
     {ok, #state { container = Container, relay_to = RelayTo, image = Image }}.
