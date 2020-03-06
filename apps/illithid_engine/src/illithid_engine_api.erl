@@ -59,7 +59,7 @@ handle_cast(_Msg, State) ->
 handle_info({client_connection, Socket}, State) ->
     {noreply, State#state { socket = Socket}};
 
-handle_info({container_msg, {Pid, Msg}}, #state { socket = Socket } = State) when is_pid(Pid) ->
+handle_info({container_msg, Pid, Msg}, #state { socket = Socket } = State) when is_pid(Pid) ->
     send_to_cli(Msg, Socket),
     {noreply, State};
 
@@ -101,6 +101,10 @@ listen(APIProces, LSocket) ->
             exit(normal)
     end.
 
+
+handle_command(["container", "ls"], Socket) ->
+    Containers = illithid_engine_metadata:list_containers(),
+    send_to_cli(Containers, Socket);
 
 handle_command(["container", "run", ImageIdentifier | Command], _Socket) ->
     Image = illithid_engine_metadata:get_image(ImageIdentifier),

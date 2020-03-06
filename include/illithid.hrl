@@ -20,11 +20,12 @@
 -record(container, {
           id           = none,
           name         = none,
-          jid          = none,
+          running      = false,
           pid          = none, % Erlang proces id of the gen_server
           command      = none,
           layer        = none,
           ip           = none,
+          image_id     = none,
           parameters   = [],
           created      = none
           }).

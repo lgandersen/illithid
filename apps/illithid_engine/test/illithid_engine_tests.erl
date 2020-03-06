@@ -46,7 +46,7 @@ create_container_as_nonroot(Opts) ->
     ok = illithid_engine_container:start(Pid),
     receive
         Msg ->
-            ?_assertEqual({container_msg, {Pid, {data, {eol, "uid=123(ntpd) gid=123(ntpd) groups=123(ntpd)"}}}}, Msg)
+            ?_assertEqual({container_msg, Pid, {data, {eol, "uid=123(ntpd) gid=123(ntpd) groups=123(ntpd)"}}}, Msg)
     end.
 
 

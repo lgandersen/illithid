@@ -57,14 +57,14 @@ start(Pid) ->
 start_await(Pid) ->
     ok = attach(Pid),
     gen_server:cast(Pid, start),
-    receive_exit_status(Pid).
+    await_exit_status(Pid).
 
 
 stop_await(Pid) ->
     ok = attach(Pid),
     gen_server:cast(Pid, {stop_await, self()}),
     receive
-        {ok, {exit_status, N}} ->
+        {container_msg, Pid, {exit_status, N}} ->
             {ok, {exit_status, N}}
     end.
 
@@ -77,7 +77,8 @@ metadata(Pid) ->
 %%% gen_server callbacks
 %%%===================================================================
 init([Opts]) ->
-    #image {user    = DefaultUser,
+    #image {id      = ImageId,
+            user    = DefaultUser,
             command = DefaultCmd } = Image = proplists:get_value(image, Opts, ?BASE_IMAGE),
     {ok, Layer} = illithid_engine_layer:new(Image),
     Cmd = proplists:get_value(cmd, Opts, DefaultCmd),
@@ -92,6 +93,7 @@ init([Opts]) ->
                    pid        = self(),
                    command    = Cmd,
                    layer      = Layer,
+                   image_id   = ImageId,
                    parameters = ["exec.jail_user=" ++ User | JailParam],
                    created    = erlang:timestamp()
                   },
@@ -112,39 +114,43 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(start, #state { container = Container} = State) ->
     Port = start_(Container),
-    {noreply, State#state { starting_port = Port}};
+    UpdatedContainer = Container#container { running = true },
+    illithid_engine_metadata:add_container(UpdatedContainer),
+    {noreply, State#state {
+                starting_port = Port,
+                container     = UpdatedContainer }
+    };
 
 handle_cast({stop_await, Pid}, #state { container = Container} = State) ->
-    Port = destroy_(Container),
+    Port = stop_jail(Container),
     {noreply, State#state { closing_port = Port, caller = Pid }};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({Port, {exit_status, N}}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
-    lager:info("container-~s jail was closed with exit-code: ~p", [Container#container.id, N]),
-    #container { layer = #layer {path = Path}} = Container,
+handle_info({Port, {exit_status, N} = Msg}, #state { closing_port = Port, caller = Caller,  container = Container } = State) ->
+    #container { id = Id, layer = #layer { path = Path }} = Container,
+    lager:info("container-~s jail was closed with exit-code: ~p", [Id, N]),
     umount_devfs(Path),
-    NewState = case Caller of
-        none ->
-            State;
+    relay_message(Msg, Caller),
+    UpdatedContainer = Container#container { running = false, pid = none },
+    illithid_engine_metadata:add_container(UpdatedContainer),
+    {stop, {shutdown, jail_stopped}, State#state {
+                                       caller       = none,
+                                       closing_port = none,
+                                       container    = UpdatedContainer }
+    };
 
-        _Pid ->
-            Caller ! {ok, {exit_status, N}},
-            State#state { caller = none }
-    end,
-    illithid_engine_network:remove_ip(Container#container.ip),
-    {stop, {shutdown, jail_stopped}, NewState#state { closing_port = none }};
+handle_info({Port, {exit_status, N} = Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
+    #container { id = Id, layer = #layer { path = Path }} = Container,
+    lager:info("container-~s jail finished with exit-code: ~p", [Id, N]),
+    umount_devfs(Path),
+    relay_message(Msg, RelayTo),
+    {noreply, State};
 
 handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
     lager:debug("container#~s message received: ~p", [Container#container.id, Msg]),
-    case RelayTo of
-        none ->
-            ok;
-
-        Pid when is_pid(Pid) ->
-            RelayTo ! {container_msg, {self(), Msg}}
-    end,
+    relay_message(Msg, RelayTo),
     {noreply, State};
 
 handle_info(Info, #state { container = #container { id = Id }} = State) ->
@@ -163,13 +169,30 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-receive_exit_status(Pid) ->
+relay_message(Msg, RelayTo) ->
+    case {RelayTo, Msg} of
+        {none, _} ->
+            ok;
+
+        {Pid, {exit_status, N}} when is_pid(Pid) ->
+            RelayTo ! {container_msg, self(), {exit_status, N}};
+
+        {Pid, _} when is_pid(Pid) ->
+            RelayTo ! {container_msg, self(), Msg}
+    end.
+
+
+await_exit_status(Pid) ->
     receive
-        {container_msg, {Pid, {exit_status, N}}} ->
+        {container_msg, Pid, {exit_status, N}} ->
             {ok, {exit_status, N}};
 
-        {container_msg, {Pid, _Msg}} ->
-            receive_exit_status(Pid)
+        {container_msg, Pid, _Msg} ->
+            await_exit_status(Pid);
+
+        UnknownMsg ->
+            lager:warning("Unknown message received while waiting for exit status: ~p", [UnknownMsg]),
+            await_exit_status(Pid)
     end.
 
 
@@ -198,7 +221,7 @@ start_(#container {
     Port.
 
 
-destroy_(#container { id = Id }) ->
+stop_jail(#container { id = Id }) ->
     Executable = "/usr/sbin/jail",
     Args = ["-r", Id],
     Port = open_port({spawn_executable, Executable},

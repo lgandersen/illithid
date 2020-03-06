@@ -140,6 +140,10 @@ handle_reply(["image", "build", "-t", _NameTagRaw, Path], {ok, Image}) ->
     to_cli("Image id: ~s~n", [Image#image.id]),
     done();
 
+handle_reply(["container", "ls"], Containers) ->
+    to_cli(?LIST_CONTAINERS_HEADER),
+    print_containers(Containers);
+
 handle_reply(["container", "run", _ImageId | _Command], {data, {eol, Line}}) ->
     to_cli(Line ++ "\n");
 
@@ -155,23 +159,54 @@ handle_reply(_Request, Reply) ->
     Reply.
 
 
+print_containers([#container { id = Id, image_id = ImageId, name = Name, command = Cmd, running = Running, created = Created } | Rest]) ->
+    Status = case Running of
+                 true -> "running";
+                 false -> "stopped"
+             end,
+    Datetime = timestamp_to_string(Created),
+    CmdStr = string:join(Cmd, " "),
+    to_cli(string:join([
+                        cell(Id, 12), sp(3),
+                        cell(ImageId, 25), sp(3),
+                        cell(CmdStr, 23), sp(3),
+                        cell(Datetime, 11), sp(3),
+                        cell(Status, 7), sp(3),
+                        cell("N/A", 5), sp(3),
+                        Name, "~n"
+                       ], "")),
+    print_containers(Rest);
+
+print_containers([]) ->
+    done(),
+    ok.
+
+
 print_images([#image { id = Id, name = Name, tag = Tag, created = Created } | Rest]) ->
-    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_datetime(Created),
-
-    %% "~.4.0w-~.2.0w-~.2.0wT~.2.0w:~.2.0w:~.2.0w.0+00:00" => "2019-09-19T15:07:03.0+00:00"
-    Datetime = io_lib:format(
-                 "~.4.0w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
-                 [Year, Month, Day, Hour, Min, Sec]),
-
-    to_cli(
-      "~s  ~s  ~s  ~s  n/a MB~n",
-      [cell(Name, 12), cell(Tag, 10), cell(Id, 12), cell(Datetime, 11)]),
+    Datetime = timestamp_to_string(Created),
+    to_cli(string:join(
+      [cell(Name, 12), sp(2),
+       cell(Tag, 10), sp(2),
+       cell(Id, 12), sp(2),
+       cell(Datetime, 11), "  n/a MB~n"], "")),
     print_images(Rest);
 
 print_images([]) ->
     done(),
     ok.
 
+
+timestamp_to_string(Timestamp) ->
+    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_datetime(Timestamp),
+
+    %% "~.4.0w-~.2.0w-~.2.0wT~.2.0w:~.2.0w:~.2.0w.0+00:00" => "2019-09-19T15:07:03.0+00:00"
+    Datetime = io_lib:format(
+                 "~.4.0w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w",
+                 [Year, Month, Day, Hour, Min, Sec]),
+    Datetime.
+
+sp(N) ->
+    string:copies(" ", N).
 
 cell(Content, Size) ->
     case length(Content) =< Size of

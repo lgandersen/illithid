@@ -22,6 +22,8 @@ main(Cmd) ->
 ?CREATE_COMMAND(["image", "build", "-t", NameTagRaw, Path]);
 ?CREATE_COMMAND(["image", "ls"]);
 ?CREATE_COMMAND(["container", "run", Image | Command]);
+?CREATE_COMMAND(["container", "ls"]);
+?CREATE_COMMAND(["container", "ls", "--all"]);
 ?CREATE_COMMAND(["clear", "zroot"]);
 
 

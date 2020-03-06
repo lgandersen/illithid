@@ -47,12 +47,12 @@ add_container(Container) ->
 
 
 list_containers() ->
-    Images = mnesia:dirty_match_object({container, '_', '_', '_', '_', '_', '_', '_', '_', '_'}),
-    ImagesOrdered = lists:sort(
+    Containers = mnesia:dirty_match_object({container, '_', '_', '_', '_', '_', '_', '_', '_', '_', '_'}),
+    ContainersOrdered = lists:sort(
                fun(#container { created = A }, #container { created = B }) ->
-                       A =< B
-               end, Images),
-    ImagesOrdered.
+                       A >= B
+               end, Containers),
+    ContainersOrdered.
 
 
 add_image(Image) ->
@@ -72,10 +72,10 @@ list_images() ->
                                       _ -> true
                                   end
                           end, ImagesAll),
-    Images = lists:reverse(lists:sort(
+    Images = lists:sort(
                fun(#image { created = A }, #image { created = B }) ->
-                       A =< B
-               end, ImagesUnordered)),
+                       A >= B
+               end, ImagesUnordered),
     Images.
 
 
@@ -187,9 +187,9 @@ list_containers_test() ->
     add_container(#container { id = "1338", name = "testing-2", created = erlang:timestamp()}),
     add_container(#container { id = "1339", name = "testing-3", created = erlang:timestamp()}),
     Containers = list_containers(),
-    ?assertMatch([#container { id = "1337"},
+    ?assertMatch([#container { id = "1339"},
                   #container { id = "1338"},
-                  #container { id = "1339"}], Containers).
+                  #container { id = "1337"}], Containers).
 
 
 add_and_get_image_test() ->

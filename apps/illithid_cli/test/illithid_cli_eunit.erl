@@ -31,8 +31,9 @@ instructions_test_() ->
                                   fun test_build_image/1,
                                   fun test_build_image_with_tag/1,
                                   fun test_list_images/1,
-                                  fun test_run_image/1,
-                                  fun test_run_image_with_custom_command/1
+                                  fun test_list_container/1,
+                                  fun test_run_container/1,
+                                  fun test_run_container_with_custom_command/1
                                   ]
      }.
 
@@ -108,7 +109,32 @@ test_build_image_with_tag(_) ->
     ].
 
 
-test_run_image(_) ->
+test_list_container(_) ->
+    illithid_engine_metadata:add_container(#container { id       = "1337",
+                                                        name     = "testing-1",
+                                                        image_id = "testparent-image1",
+                                                        command  = ["/bin/ls", "/etc"],
+                                                        created  = {1578, 330264, 608742} }
+                                          ),
+    illithid_engine_metadata:add_container(#container { id       = "1338",
+                                                        name     = "testing-2",
+                                                        image_id = "testparent-image2",
+                                                        command  = ["/bin/ls", "/etc/ssh"],
+                                                        created  = {1578, 330200, 0} }
+                                          ),
+    illithid_cli:main_(["container", "ls"]),
+    [Header, ContainerStr1, ContainerStr2] = receive_messages("test-list-containers"),
+
+    [?_assertEqual(Header, ?LIST_CONTAINERS_HEADER),
+     ?_assertTextEqual(
+        "1337           testparent-image1           /bin/ls /etc              2020-01-06 17:04:24   stopped   N/A     testing-1\n",
+        ContainerStr1),
+    ?_assertTextEqual(
+        "1338           testparent-image2           /bin/ls /etc/ssh          2020-01-06 17:03:20   stopped   N/A     testing-2\n",
+       ContainerStr2)].
+
+
+test_run_container(_) ->
     [Id] = build_image("run-image", []),
     illithid_cli:main_(["run", Id]),
     [Msg0, Msg1, Msg2, Msg3] = receive_messages("run-image"),
@@ -123,7 +149,7 @@ test_run_image(_) ->
     ].
 
 
-test_run_image_with_custom_command(_) ->
+test_run_container_with_custom_command(_) ->
     [Id] = build_image("run-image-with-custom", []),
     illithid_cli:main_(["run", Id, "cat", "/root/test.txt"]),
     [Msg0, Msg1] = receive_messages("run-image-with-custom"),
