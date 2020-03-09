@@ -13,10 +13,19 @@
 
 main(Cmd) ->
     register(cli_process, self()),
-    {ok, Pid} = illithid_cli_engine_client:start_link(),
-    unlink(Pid),
-    main_(Cmd),
-    relay_messages().
+    case illithid_cli_engine_client:start_link() of
+        {ok, Pid} ->
+            unlink(Pid),
+            main_(Cmd),
+            relay_messages();
+
+        {error, eacces} ->
+            io:format("Could not connect to the illithid daemon socket at ~s~n", [?API_SOCKET]),
+            io:format("Do you have the right privileges?~n");
+
+        UnknownReturn ->
+            io:format("Unknown error occured: ~p~n", [UnknownReturn])
+    end.
 
 
 ?CREATE_COMMAND(["image", "build", "-t", NameTagRaw, Path]);
@@ -40,8 +49,15 @@ main(Cmd) ->
    ["build", Path],
    ["build", "-t", "", Path]);
 
+
+main_(["--help"]) ->
+    io:format("I am sorry but there is no help available at the moment :(~n"),
+    self() ! done;
+
 main_(Args) ->
-    io:format("Unkown command: ~p~n", [Args]).
+    io:format("illithid: '~s' is not a illithid command.~n", [string:join(Args, " ")]),
+    io:format("See 'illithid --help'~n"),
+    self() ! done.
 
 
 relay_messages() ->
@@ -49,7 +65,11 @@ relay_messages() ->
         done ->
             ok;
 
-        Msg ->
+        {cli_msg, Msg} ->
             io:format(Msg),
-            relay_messages()
+            relay_messages();
+
+        Msg ->
+            io:format("Warning! Unknown message received from backend: ~p~n", [Msg])
+
     end.

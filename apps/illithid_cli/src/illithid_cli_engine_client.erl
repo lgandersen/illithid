@@ -52,7 +52,6 @@ init([CliPid]) ->
             {ok, #state{ socket = Socket, cli_pid = CliPid }};
 
         {error, Reason} ->
-            io:format("Error! Could not connect to backend on ~p~n", [?API_SOCKET]),
             {stop, Reason}
     end.
 

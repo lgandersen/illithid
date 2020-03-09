@@ -110,6 +110,10 @@ test_build_image_with_tag(_) ->
 
 
 test_list_container(_) ->
+    illithid_cli:main_(["container", "ls"]),
+    [HeaderAndNoMore] = receive_messages("test-list-containers"),
+
+
     illithid_engine_metadata:add_container(#container { id       = "1337",
                                                         name     = "testing-1",
                                                         image_id = "testparent-image1",
@@ -125,7 +129,8 @@ test_list_container(_) ->
     illithid_cli:main_(["container", "ls"]),
     [Header, ContainerStr1, ContainerStr2] = receive_messages("test-list-containers"),
 
-    [?_assertEqual(Header, ?LIST_CONTAINERS_HEADER),
+    [?_assertEqual(HeaderAndNoMore, ?LIST_CONTAINERS_HEADER),
+     ?_assertEqual(Header, ?LIST_CONTAINERS_HEADER),
      ?_assertTextEqual(
         "1337           testparent-image1           /bin/ls /etc              2020-01-06 17:04:24   stopped   N/A     testing-1\n",
         ContainerStr1),
