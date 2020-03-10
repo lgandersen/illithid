@@ -103,6 +103,10 @@ listen(APIProces, LSocket) ->
 
 
 handle_command(["container", "ls"], Socket) ->
+    Containers = illithid_engine_metadata:list_running_containers(),
+    send_to_cli(Containers, Socket);
+
+handle_command(["container", "ls", "--all"], Socket) ->
     Containers = illithid_engine_metadata:list_containers(),
     send_to_cli(Containers, Socket);
 

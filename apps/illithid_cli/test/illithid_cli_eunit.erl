@@ -31,7 +31,8 @@ instructions_test_() ->
                                   fun test_build_image/1,
                                   fun test_build_image_with_tag/1,
                                   fun test_list_images/1,
-                                  fun test_list_container/1,
+                                  fun test_list_all_containers/1,
+                                  fun test_list_running_containers/1,
                                   fun test_run_container/1,
                                   fun test_run_container_with_custom_command/1
                                   ]
@@ -109,8 +110,36 @@ test_build_image_with_tag(_) ->
     ].
 
 
-test_list_container(_) ->
+test_list_running_containers(_) ->
     illithid_cli:main_(["container", "ls"]),
+    [HeaderAndNoMore] = receive_messages("test-list-running-containers"),
+
+
+    illithid_engine_metadata:add_container(#container { id       = "1337",
+                                                        name     = "testing-1",
+                                                        image_id = "testparent-image1",
+                                                        command  = ["/bin/ls", "/etc"],
+                                                        running  = true,
+                                                        created  = {1578, 330264, 608742} }
+                                          ),
+    illithid_engine_metadata:add_container(#container { id       = "1338",
+                                                        name     = "testing-2",
+                                                        image_id = "testparent-image2",
+                                                        command  = ["/bin/ls", "/etc/ssh"],
+                                                        created  = {1578, 330200, 0} }
+                                          ),
+    illithid_cli:main_(["container", "ls"]),
+    [Header, ContainerStr] = receive_messages("test-list-running-containers"),
+
+    [?_assertEqual(HeaderAndNoMore, ?LIST_CONTAINERS_HEADER),
+     ?_assertEqual(Header, ?LIST_CONTAINERS_HEADER),
+     ?_assertTextEqual(
+        "1337           testparent-image1           /bin/ls /etc              2020-01-06 17:04:24   running   N/A     testing-1\n",
+        ContainerStr)].
+
+
+test_list_all_containers(_) ->
+    illithid_cli:main_(["container", "ls", "--all"]),
     [HeaderAndNoMore] = receive_messages("test-list-containers"),
 
 
@@ -126,7 +155,7 @@ test_list_container(_) ->
                                                         command  = ["/bin/ls", "/etc/ssh"],
                                                         created  = {1578, 330200, 0} }
                                           ),
-    illithid_cli:main_(["container", "ls"]),
+    illithid_cli:main_(["container", "ls", "--all"]),
     [Header, ContainerStr1, ContainerStr2] = receive_messages("test-list-containers"),
 
     [?_assertEqual(HeaderAndNoMore, ?LIST_CONTAINERS_HEADER),

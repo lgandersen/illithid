@@ -139,6 +139,9 @@ handle_reply(["image", "build", "-t", _NameTagRaw, Path], {ok, Image}) ->
     to_cli("Image id: ~s~n", [Image#image.id]),
     done();
 
+handle_reply(["container", "ls", "--all"], Containers) ->
+    handle_reply(["container", "ls"], Containers);
+
 handle_reply(["container", "ls"], Containers) ->
     to_cli(?LIST_CONTAINERS_HEADER),
     print_containers(Containers);

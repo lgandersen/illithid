@@ -20,6 +20,7 @@
          list_images/0,
          add_container/1,
          list_containers/0,
+         list_running_containers/0,
          clear_all/0]).
 
 %% gen_server callbacks
@@ -46,13 +47,22 @@ add_container(Container) ->
     mnesia:transaction(fun() -> mnesia:write(Container) end).
 
 
+list_running_containers() ->
+    MatchSpec = ets:fun2ms(
+                  fun(#container{ running = true } = Container) ->
+                          Container
+                  end),
+    {atomic, Containers} = mnesia:transaction(fun() -> mnesia:select(container, MatchSpec, read) end),
+    sort_containers(Containers).
+
+
 list_containers() ->
-    Containers = mnesia:dirty_match_object({container, '_', '_', '_', '_', '_', '_', '_', '_', '_', '_'}),
-    ContainersOrdered = lists:sort(
-               fun(#container { created = A }, #container { created = B }) ->
-                       A >= B
-               end, Containers),
-    ContainersOrdered.
+    MatchSpec = ets:fun2ms(
+                  fun(#container{} = Container) ->
+                          Container
+                  end),
+    {atomic, Containers} = mnesia:transaction(fun() -> mnesia:select(container, MatchSpec, read) end),
+    sort_containers(Containers).
 
 
 add_image(Image) ->
@@ -65,18 +75,12 @@ get_image(ImageId) ->
 
 
 list_images() ->
-    ImagesAll = mnesia:dirty_match_object({image, '_', '_', '_', '_', '_', '_', '_'}),
-    ImagesUnordered = lists:filter(fun(Image) ->
-                                  case Image#image.id of
-                                      base -> false;
-                                      _ -> true
-                                  end
-                          end, ImagesAll),
-    Images = lists:sort(
-               fun(#image { created = A }, #image { created = B }) ->
-                       A >= B
-               end, ImagesUnordered),
-    Images.
+    MatchSpec = ets:fun2ms(
+                  fun(#image{ id = Id } = Image) when Id =/= base ->
+                          Image
+                  end),
+    {atomic, Images} = mnesia:transaction(fun() -> mnesia:select(image, MatchSpec, read) end),
+    sort_images(Images).
 
 
 clear_all() ->
@@ -128,6 +132,20 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+sort_containers(Containers) ->
+    lists:sort(
+      fun(#container { created = A }, #container { created = B }) ->
+              A >= B
+      end, Containers).
+
+
+sort_images(Images) ->
+    lists:sort(
+               fun(#image { created = A }, #image { created = B }) ->
+                       A >= B
+               end, Images).
+
+
 add_image_(#image { name = Name, tag = Tag } = Image) ->
     Match = ets:fun2ms(
               fun(#image { name = ImgName, tag = ImgTag } = Img)
@@ -190,6 +208,12 @@ list_containers_test() ->
     ?assertMatch([#container { id = "1339"},
                   #container { id = "1338"},
                   #container { id = "1337"}], Containers).
+
+
+list_running_containers_test() ->
+    add_container(#container { id = "1340", name = "testing-2", running = true, created = erlang:timestamp()}),
+    Containers = list_running_containers(),
+    ?assertMatch([#container { id = "1340"}], Containers).
 
 
 add_and_get_image_test() ->
