@@ -20,8 +20,12 @@ main(Cmd) ->
             relay_messages();
 
         {error, eacces} ->
-            io:format("Could not connect to the illithid daemon socket at ~s~n", [?API_SOCKET]),
+            io:format("Error! Insufficient permissions for connecting to the illithid daemon socket at ~s~n", [?API_SOCKET]),
             io:format("Do you have the right privileges?~n");
+
+        {error, enoent} ->
+            io:format("The socket at ~s does not seem to exist~n", [?API_SOCKET]),
+            io:format("Is the illithid daemon running?~n");
 
         UnknownReturn ->
             io:format("Unknown error occured: ~p~n", [UnknownReturn])
