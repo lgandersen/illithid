@@ -5,10 +5,6 @@
          parse/1
         ]).
 
-parse(FileName) when is_list(FileName) ->
-    {ok, FileRaw} = file:read_file(FileName),
-    parse(FileRaw);
-
 
 parse(FileRaw) when is_binary(FileRaw) ->
     {ok, Tokens} = tokenize(FileRaw),
@@ -128,8 +124,10 @@ instructions_test_() ->
                                   fun test_expose_instruction/1]
      }.
 
+
 test_general_tokenization(_) ->
-    [?_assertMatch([_All|_Tokens], parse("./apps/illithid_engine/test/eunit_data/Dockerfile"))].
+    {ok, FileRaw} = file:read_file("./apps/illithid_engine/test/eunit_data/Dockerfile"),
+    [?_assertMatch([_All|_Tokens], parse(FileRaw))].
 
 
 test_from_instruction(_) ->

@@ -23,6 +23,7 @@ stop({SupPid, Pid}) ->
     %ok = application:stop(illithid_engine),
     exit(SupPid, shutdown),
     unregister(cli_process),
+    illithid_engine_zfs:clear_zroot(),
     ok.
 
 instructions_test_() ->
@@ -30,6 +31,7 @@ instructions_test_() ->
                                   fun test_clear_zroot/1,
                                   fun test_build_image/1,
                                   fun test_build_image_with_tag/1,
+                                  fun test_build_image_invalid_relative_path/1,
                                   fun test_list_images/1,
                                   fun test_list_all_containers/1,
                                   fun test_list_running_containers/1,
@@ -94,6 +96,21 @@ test_build_image(_) ->
      ?_assertMatch(
        [#image { id = Id, name = none, tag = none }],
        Images)
+    ].
+
+
+test_build_image_invalid_relative_path(_) ->
+    RelativePath = "invalid_path",
+    {ok, Root} = file:get_cwd(),
+    AbsolutePath = Root ++ "/" ++ RelativePath,
+    illithid_cli:main_(["build", RelativePath]),
+    [Msg1, Msg2] = receive_messages("build-image-invalid-relative-path"),
+    [?_assertTextEqual(
+       unicode:characters_to_list(?IMAGE_BUILD_ERROR_MSG_1(AbsolutePath)),
+       Msg1),
+     ?_assertEqual(
+       ?IMAGE_BUILD_ERROR_MSG_2(enoent),
+       Msg2)
     ].
 
 

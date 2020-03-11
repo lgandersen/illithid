@@ -61,7 +61,8 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 
-handle_cast({command, Cmd}, #state { socket = Socket } = State) ->
+handle_cast({command, CmdRaw}, #state { socket = Socket } = State) ->
+    Cmd = parse_parameters(CmdRaw),
     CmdBin = erlang:term_to_binary(Cmd),
     case gen_tcp:send(Socket, CmdBin) of
         ok ->
@@ -85,16 +86,13 @@ handle_info({tcp_error, _Socket, Reason}, #state { cli_pid = CliPid } = State) -
     CliPid ! done,
     {stop, {shutdown, {tcp_error, Reason}}, State};
 
-
 handle_info({tcp, Socket, ReplyBin}, #state { cmd = Cmd, buffer = Buffer } = State) ->
     NewBuffer = decode_buffer(<<Buffer/binary, ReplyBin/binary>>, Cmd, Socket),
     {noreply, State#state{ buffer = NewBuffer }};
 
-
 handle_info(Info, State) ->
     io:format(user, "illithid_cli_engine_client: Unkown message received: ~p ~n", [Info]),
     {noreply, State}.
-
 
 
 terminate(Reason, #state{ socket = Socket }) ->
@@ -110,22 +108,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-decode_buffer(<<>>, _Cmd, _Socket) ->
-    <<>>;
-
-decode_buffer(Buffer, Cmd, Socket) ->
-    case erlang:binary_to_term(Buffer) of
-        badarg ->
-            Buffer;
-
-        Reply ->
-            BufferUsed = size(erlang:term_to_binary(Reply)),
-            handle_reply(Cmd, Reply),
-            NewBuffer = binary:part(Buffer, BufferUsed, size(Buffer) - BufferUsed),
-            decode_buffer(NewBuffer, Cmd, Socket)
-    end.
-
-
 handle_reply(["clear", "zroot"], ok) ->
     to_cli(?ZROOT_CLEARED),
     done();
@@ -133,6 +115,11 @@ handle_reply(["clear", "zroot"], ok) ->
 handle_reply(["image", "ls"], Images) ->
     to_cli(?LIST_IMAGES_HEADER),
     print_images(Images);
+
+handle_reply(["image", "build", "-t", _NameTagRaw, Path], {error, Reason}) ->
+    to_cli(?IMAGE_BUILD_ERROR_MSG_1(Path)),
+    to_cli(?IMAGE_BUILD_ERROR_MSG_2(Reason)),
+    done();
 
 handle_reply(["image", "build", "-t", _NameTagRaw, Path], {ok, Image}) ->
     to_cli("Succesfully built image from ~p~n", [Path]),
@@ -159,6 +146,39 @@ handle_reply(["container", "run", _ImageId | _Command], Reply) ->
 handle_reply(_Request, Reply) ->
     io:format(user, "Reply not understood: ~p~n", [Reply]),
     Reply.
+
+
+parse_parameters(["image", "build", "-t", _NameTag, Path]) ->
+    AbsolutePath = create_absolute_path(Path),
+    ["image", "build", "-t", _NameTag, AbsolutePath];
+
+parse_parameters(Cmd) ->
+    Cmd.
+
+
+create_absolute_path([$/ | _Rest] = AbsolutePath) ->
+    AbsolutePath;
+
+create_absolute_path(Path) ->
+    {ok, Cwd} = file:get_cwd(),
+    AbsolutePath = Cwd ++ "/" ++ Path,
+    AbsolutePath.
+
+
+decode_buffer(<<>>, _Cmd, _Socket) ->
+    <<>>;
+
+decode_buffer(Buffer, Cmd, Socket) ->
+    case erlang:binary_to_term(Buffer) of
+        badarg ->
+            Buffer;
+
+        Reply ->
+            BufferUsed = size(erlang:term_to_binary(Reply)),
+            handle_reply(Cmd, Reply),
+            NewBuffer = binary:part(Buffer, BufferUsed, size(Buffer) - BufferUsed),
+            decode_buffer(NewBuffer, Cmd, Socket)
+    end.
 
 
 print_containers([#container { id = Id, image_id = ImageId, name = Name, command = Cmd, running = Running, created = Created } | Rest]) ->

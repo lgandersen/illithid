@@ -132,12 +132,21 @@ handle_command(["image", "ls"], Socket) ->
     send_to_cli(Images, Socket);
 
 handle_command(["image", "build", "-t", NameTagRaw, Path], Socket) ->
-    DockerFilePath = Path ++ "/Dockerfile",
     {Name, Tag} = parse_nametag(NameTagRaw),
-    Instructions = illithid_engine_dockerfile:parse(DockerFilePath),
-    {ok, Image} = illithid_engine_image:create_image(Instructions, DockerFilePath),
-    illithid_engine_metadata:add_image(Image#image { name = Name, tag = Tag }),
-    send_to_cli({ok, Image}, Socket);
+
+    DockerFilePath = Path ++ "/Dockerfile",
+    lager:info("Opening Dockerfile at ~s", [DockerFilePath]),
+    case file:read_file(DockerFilePath) of
+        {ok, FileRaw} ->
+                file:read_file(DockerFilePath),
+                Instructions = illithid_engine_dockerfile:parse(FileRaw),
+                {ok, Image} = illithid_engine_image:create_image(Instructions, DockerFilePath),
+                illithid_engine_metadata:add_image(Image#image { name = Name, tag = Tag }),
+                send_to_cli({ok, Image}, Socket);
+
+        {error, Reason} ->
+                send_to_cli({error, Reason}, Socket)
+    end;
 
 handle_command(UnkownCommand, _Socket) ->
     lager:warning("Command ~p not understood.", [UnkownCommand]).
