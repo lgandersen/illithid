@@ -143,7 +143,6 @@ proces_instructions(#build_state { instructions = [ {user, User} | Rest ], image
                  },
     proces_instructions(NewState);
 
-
 proces_instructions(#build_state { instructions = [ {cmd, Args} | Rest ], image_record = Image } = State) ->
     NewState = State#build_state {
                   instructions = Rest,

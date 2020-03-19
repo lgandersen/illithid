@@ -77,9 +77,9 @@ metadata(Pid) ->
 %%% gen_server callbacks
 %%%===================================================================
 init([Opts]) ->
-    #image {id      = ImageId,
-            user    = DefaultUser,
-            command = DefaultCmd } = Image = proplists:get_value(image, Opts, ?BASE_IMAGE),
+    #image { id      = ImageId,
+             user    = DefaultUser,
+             command = DefaultCmd } = Image = proplists:get_value(image, Opts, ?BASE_IMAGE),
     {ok, Layer} = illithid_engine_layer:new(Image),
     Cmd = proplists:get_value(cmd, Opts, DefaultCmd),
     User = proplists:get_value(user, Opts, DefaultUser),
@@ -133,7 +133,10 @@ handle_info({Port, {exit_status, N} = Msg}, #state { closing_port = Port, caller
     lager:info("container-~s jail was closed with exit-code: ~p", [Id, N]),
     umount_devfs(Path),
     relay_message(Msg, Caller),
-    UpdatedContainer = Container#container { running = false, pid = none },
+    UpdatedContainer = Container#container {
+                         running = false,
+                         pid     = none
+                        },
     illithid_engine_metadata:add_container(UpdatedContainer),
     {stop, {shutdown, jail_stopped}, State#state {
                                        caller       = none,
@@ -144,9 +147,26 @@ handle_info({Port, {exit_status, N} = Msg}, #state { closing_port = Port, caller
 handle_info({Port, {exit_status, N} = Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
     #container { id = Id, layer = #layer { path = Path }} = Container,
     lager:info("container-~s jail finished with exit-code: ~p", [Id, N]),
-    umount_devfs(Path),
+    Cmd = io_lib:format("jls --libxo=json -j ~s", [Id]),
     relay_message(Msg, RelayTo),
-    {noreply, State};
+    case string:tokens(os:cmd(Cmd), " ") of
+        %% Jail is not found so it is not running anymore
+        ["jls:", "jail", _, "not"| _Rest] ->
+            umount_devfs(Path),
+            UpdatedContainer = Container#container {
+                                 running       = false,
+                                 pid           = none
+                                },
+            illithid_engine_metadata:add_container(UpdatedContainer),
+            {stop, {shutdown, jail_stopped}, State#state {
+                                               starting_port = none,
+                                               container     = UpdatedContainer }};
+
+
+        %% jls return a bunch of JSON so it is still running TODO: verify?
+        _ ->
+            {noreply, State#state { starting_port = none }}
+    end;
 
 handle_info({Port, Msg}, State = #state { starting_port = Port, relay_to = RelayTo, container = Container }) ->
     lager:debug("container#~s message received: ~p", [Container#container.id, Msg]),

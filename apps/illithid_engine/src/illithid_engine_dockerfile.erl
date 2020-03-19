@@ -40,7 +40,7 @@ parse_({from, Args}) ->
     lager:info("Parser: ~p", [{from, Args}]),
     case binary:split(Args, <<" AS ">>, [global]) of
         [<<"scratch">>] ->
-            {from, base};
+            {from, "base"};
         [Image] ->
             {from, binary:bin_to_list(Image)};
         [Image, Name] ->

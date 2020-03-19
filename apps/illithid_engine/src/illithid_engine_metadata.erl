@@ -76,7 +76,7 @@ get_image(ImageId) ->
 
 list_images() ->
     MatchSpec = ets:fun2ms(
-                  fun(#image{ id = Id } = Image) when Id =/= base ->
+                  fun(#image{ id = Id } = Image) when Id =/= "base" ->
                           Image
                   end),
     {atomic, Images} = mnesia:transaction(fun() -> mnesia:select(image, MatchSpec, read) end),

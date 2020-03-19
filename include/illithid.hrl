@@ -42,8 +42,8 @@
          }).
 
 
--define(BASE_LAYER, #layer {id = base, location = ?BASE_LAYER_LOCATION, path = ?BASE_LAYER_PATH }).
--define(BASE_IMAGE, #image {id = base, tag = "base", layers = [?BASE_LAYER]}).
+-define(BASE_LAYER, #layer {id = "base", location = ?BASE_LAYER_LOCATION, path = ?BASE_LAYER_PATH }).
+-define(BASE_IMAGE, #image {id = "base", tag = "base", layers = [?BASE_LAYER]}).
 
 
 -define(TEST_LOG_LEVEL, info).

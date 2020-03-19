@@ -14,14 +14,14 @@ container_start() ->
                          ]}
            ],
     ok = illithid_engine_zfs:clear_zroot(),
-    {ok, _} = illithid_engine_layer:start_link(),
-    {ok, _} = illithid_engine_network:start_link(),
+    {ok, _SupPid} = illithid_engine_sup:start_link(),
     Opts.
 
 
 container_stop(_) ->
-    gen_server:stop(illithid_engine_layer),
-    gen_server:stop(illithid_engine_network),
+    SupervisorPid = whereis(illithid_engine_sup),
+    unlink(SupervisorPid),
+    exit(SupervisorPid, shutdown),
     ok.
 
 
@@ -36,12 +36,12 @@ container_test_() ->
 
 
 create_container_async(Opts) ->
-    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
+    {ok, Pid} = illithid_engine_container_pool:create([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual(ok, illithid_engine_container:start(Pid)).
 
 
 create_container_as_nonroot(Opts) ->
-    {ok, Pid} = illithid_engine_container:create([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
+    {ok, Pid} = illithid_engine_container_pool:create([{cmd, ["/usr/bin/id"]}, {user, "ntpd"} | Opts]),
     illithid_engine_container:attach(Pid),
     ok = illithid_engine_container:start(Pid),
     receive
@@ -51,13 +51,12 @@ create_container_as_nonroot(Opts) ->
 
 
 create_container_await(Opts) ->
-    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/ls", "/"]} | Opts]),
+    {ok, Pid} = illithid_engine_container_pool:create([{cmd, ["/bin/ls", "/"]} | Opts]),
     ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)).
 
 
 container_shutdown_await(Opts) ->
-    {ok, Pid} = illithid_engine_container:create([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
-    unlink(Pid),
+    {ok, Pid} = illithid_engine_container_pool:create([{cmd, ["/bin/sh", "/etc/rc"]} | Opts]),
     [?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:start_await(Pid)),
     {timeout, 20, ?_assertEqual({ok, {exit_status, 0}}, illithid_engine_container:stop_await(Pid))}].
 
@@ -69,7 +68,8 @@ image_building_start() ->
     [SupervisorPid].
 
 
-image_building_stop([SupervisorPid]) ->
+image_building_stop([_]) ->
+    SupervisorPid = whereis(illithid_engine_sup),
     unlink(SupervisorPid),
     exit(SupervisorPid, shutdown),
     ok.
@@ -86,7 +86,7 @@ image_building_test_() ->
 
 create_image_with_copy([_]) ->
     Context = create_test_context("test_image_builder_copy"),
-    Instructions = [{from, base},
+    Instructions = [{from, "base"},
                     {copy, ["test.txt", "/root/"]}
                     ],
     {ok, #image {
@@ -95,7 +95,7 @@ create_image_with_copy([_]) ->
 
 
 create_image_with_run([_]) ->
-    Instructions = [{from, base},
+    Instructions = [{from, "base"},
                     {run, ["/bin/sh", "-c", "echo 'lol1' > /root/test_1.txt"]}
                     ],
     {ok, #image {layers = [#layer { path = Path },
@@ -105,7 +105,7 @@ create_image_with_run([_]) ->
 
 create_image_three_layers([_]) ->
     Context = create_test_context("test_image_builder_three_layers"),
-    Instructions = [{from, base},
+    Instructions = [{from, "base"},
                     {copy, ["test.txt", "/root/"]},                             % Layer1
                     {run, ["/bin/sh", "-c", "echo 'lol1' > /root/test_1.txt"]}, % Layer2
                     {run, ["/bin/sh", "-c", "echo 'lol2' > /root/test_2.txt"]}  % Layer3
