@@ -1,7 +1,7 @@
 Illithid
 =====
 
-A recreational project playing around with jails and docker-like container management.
+Prototype of [Jocker](https://github.com/lgandersen/jocker) made in Erlang.
 
 Build
 -----
