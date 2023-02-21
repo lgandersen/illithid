@@ -1,7 +1,7 @@
 Illithid
 =====
 
-Prototype of [Jocker](https://github.com/lgandersen/jocker) made in Erlang.
+Prototype of [Kleene](https://github.com/lgandersen/jocker) made in Erlang.
 
 Build
 -----
